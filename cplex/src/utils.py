@@ -1,6 +1,7 @@
 import os
 import re
 import json
+from config import MODEL_INPUT_FOLDER_PATH
 
 def load_virtual_machines(file_path):
     if not os.path.exists(file_path):
@@ -16,15 +17,31 @@ def load_virtual_machines(file_path):
     vms = []
     for line in vm_lines:
         line = line.strip().strip('<').strip('>')
-        parts = line.split(',')
+        parts = [part.strip().strip('<').strip('>') for part in line.split(',')]
         vm = {
-            'id': int(parts[0].strip()),
-            'requested_cpu': int(parts[1].strip()),
-            'requested_memory': int(parts[2].strip()),
-            'current_execution_time': float(parts[3].strip()),
-            'total_execution_time': float(parts[4].strip()),
-            'running_on_pm': int(parts[5].strip()),
-            'expected_profit': float(parts[6].strip().strip('>'))
+            'id': int(parts[0]),
+            'requested': {
+                'cpu': int(parts[1]),
+                'memory': int(parts[2])
+            },
+            'allocation': {
+                'current_time': float(parts[3]),
+                'total_time': float(parts[4]),
+                'pm': int(parts[5])
+            },
+            'run': {
+                'current_time': float(parts[6]),
+                'total_time': float(parts[7]),
+                'pm': int(parts[8])
+            },
+            'migration': {
+                'current_time': float(parts[9]),
+                'total_time': float(parts[10]),
+                'from_pm': int(parts[11]),
+                'to_pm': int(parts[12])
+            },
+            'group': int(parts[13]),
+            'expected_profit': float(parts[14].strip('>'))
         }
         vms.append(vm)
     return vms
@@ -43,15 +60,22 @@ def load_physical_machines(file_path):
     pms = []
     for line in pm_lines:
         line = line.strip().strip('<').strip('>')
-        parts = line.split(',')
+        parts = [part.strip().strip('<').strip('>') for part in line.split(',')]
         pm = {
-            'id': int(parts[0].strip()),
-            'cpu_capacity': int(parts[1].strip()),
-            'memory_capacity': int(parts[2].strip()),
-            'max_energy_consumption': float(parts[3].strip()),
-            'time_to_turn_on': float(parts[4].strip()),
-            'time_to_turn_off': float(parts[5].strip()),
-            'state': int(parts[6].strip().strip('>'))
+            'id': int(parts[0]),
+            'capacity': {
+                'cpu': int(parts[1]),
+                'memory': int(parts[2])
+            },
+            'features': {
+                'speed': float(parts[3]),
+                'max_energy_consumption': float(parts[4])
+            },
+            's': {
+                'time_to_turn_on': float(parts[5]),
+                'time_to_turn_off': float(parts[6]),
+                'state': int(parts[7].strip('>'))
+            }
         }
         pms.append(pm)
     return pms
@@ -67,14 +91,14 @@ def save_vm_sets(active_vms, terminated_vms, step, output_folder_path):
 def convert_vms_to_model_input_format(vms):
     formatted_vms = "virtual_machines = {\n"
     for vm in vms:
-        formatted_vms += f"  <{vm['id']}, {vm['requested_cpu']}, {vm['requested_memory']}, {vm['current_execution_time']}, {vm['total_execution_time']}, {vm['running_on_pm']}, {vm['expected_profit']}>,\n"
+        formatted_vms += f"  <{vm['id']}, <{vm['requested']['cpu']}, {vm['requested']['memory']}>, <{vm['allocation']['current_time']}, {vm['allocation']['total_time']}, {vm['allocation']['pm']}>, <{vm['run']['current_time']}, {vm['run']['total_time']}, {vm['run']['pm']}>, <{vm['migration']['current_time']}, {vm['migration']['total_time']}, {vm['migration']['from_pm']}, {vm['migration']['to_pm']}>, {vm['group']}, {vm['expected_profit']}>,\n"
     formatted_vms = formatted_vms.rstrip(",\n") + "\n};"
     return formatted_vms
 
 def convert_pms_to_model_input_format(pms):
     formatted_pms = "physical_machines = {\n"
     for pm in pms:
-        formatted_pms += f"  <{pm['id']}, {pm['cpu_capacity']}, {pm['memory_capacity']}, {pm['max_energy_consumption']}, {pm['time_to_turn_on']}, {pm['time_to_turn_off']}, {pm['state']}>,\n"
+        formatted_pms += f"  <{pm['id']}, <{pm['capacity']['cpu']}, {pm['capacity']['memory']}>, <{pm['features']['speed']}, {pm['features']['max_energy_consumption']}>, <{pm['s']['time_to_turn_on']}, {pm['s']['time_to_turn_off']}, {pm['s']['state']}>>, \n"
     formatted_pms = formatted_pms.rstrip(",\n") + "\n};"
     return formatted_pms
 
@@ -94,29 +118,40 @@ def save_model_input_format(vms, pms, step, model_input_folder_path):
     return vm_model_input_file_path, pm_model_input_file_path
 
 def parse_opl_output(output):
-    new_allocation_pattern = re.compile(r'new_allocation = \[\[(.*?)\]\];', re.DOTALL)
-    vm_ids_pattern = re.compile(r'Virtual Machines IDs: \[(.*?)\]')
-    pm_ids_pattern = re.compile(r'Physical Machines IDs: \[(.*?)\]')
-    is_on_pattern = re.compile(r'is_on = \[(.*?)\];', re.DOTALL)
+    parsed_data = {}
     
-    new_allocation_match = new_allocation_pattern.search(output)
-    vm_ids_match = vm_ids_pattern.search(output)
-    pm_ids_match = pm_ids_pattern.search(output)
-    is_on_match = is_on_pattern.search(output)
+    patterns = {
+        'is_on': re.compile(r'is_on = \[(.*?)\];', re.DOTALL),
+        'new_allocation': re.compile(r'new_allocation = \[\[(.*?)\]\];', re.DOTALL),
+        'vm_ids': re.compile(r'Virtual Machines IDs: \[(.*?)\]'),
+        'pm_ids': re.compile(r'Physical Machines IDs: \[(.*?)\]'),
+        'is_allocation': re.compile(r'is_allocation = \[(.*?)\];', re.DOTALL),
+        'is_run': re.compile(r'is_run = \[(.*?)\];', re.DOTALL),
+        'is_migration': re.compile(r'is_migration = \[(.*?)\];', re.DOTALL),
+        'is_removal': re.compile(r'is_removal = \[(.*?)\];', re.DOTALL),
+        'cpu_load': re.compile(r'cpu_load = \[(.*?)\];', re.DOTALL),
+        'memory_load': re.compile(r'memory_load = \[(.*?)\];', re.DOTALL)
+    }
+    
+    for key, pattern in patterns.items():
+        match = pattern.search(output)
+        if match:
+            if key in ['new_allocation']:
+                parsed_data[key] = parse_matrix(match.group(1))
+            else:
+                parsed_data[key] = [int(num) if num.isdigit() else float(num) for num in match.group(1).strip().split()]
+    
+    return parsed_data
 
-    if new_allocation_match and vm_ids_match and pm_ids_match and is_on_match:
-        new_allocation_str = new_allocation_match.group(1)
-        vm_ids_str = vm_ids_match.group(1)
-        pm_ids_str = pm_ids_match.group(1)
-        is_on_str = is_on_match.group(1)
+def parse_matrix(matrix_str):
+    return [
+        [int(num) if num.isdigit() else float(num) for num in row.strip().split()]
+        for row in matrix_str.strip().split(']\n             [')
+    ]
 
-        new_allocation = [
-            [int(num) for num in line.split()]
-            for line in new_allocation_str.split(']\n             [')
-        ]
-        vm_ids = [int(num) for num in vm_ids_str.split()]
-        pm_ids = [int(num) for num in pm_ids_str.split()]
-        is_on = [int(num) for num in is_on_str.split()]
-
-        return new_allocation, vm_ids, pm_ids, is_on
-    return None, None, None, None
+def clean_up_model_input_files():
+    try:
+        os.remove(os.path.join(MODEL_INPUT_FOLDER_PATH, 'virtual_machines.dat'))
+        os.remove(os.path.join(MODEL_INPUT_FOLDER_PATH, 'physical_machines.dat'))
+    except FileNotFoundError:
+        pass

@@ -4,8 +4,8 @@ import sys
 from config import (
     pm_config, vm_config, default_values, data_folder_path,
     pm_cpu_capacity, pm_memory_capacity, pm_speed_range, pm_max_energy_consumption_range, pm_time_to_turn_on_range, pm_time_to_turn_off_range,
-    vm_requested_cpu, vm_requested_memory, execution_time_range, vm_expected_profit_range, migration_time_range,
-    default_num_physical_machines, default_num_virtual_machines, state_percentage
+    vm_requested_cpu, vm_requested_memory, execution_time_range, vm_expected_profit_range, migration_time_range, allocation_time_range,
+    default_num_physical_machines, default_num_virtual_machines, state_percentage, running_percentage
 )
 
 def generate_physical_machines(n, cpu_capacity, memory_capacity, speed_range, max_energy_consumption_range, time_to_turn_on_range, time_to_turn_off_range, state_percentage):
@@ -18,51 +18,57 @@ def generate_physical_machines(n, cpu_capacity, memory_capacity, speed_range, ma
     
     for i in range(n):
         id = i
-        cpu = random.choice(cpu_capacity)
-        memory = random.choice(memory_capacity)
-        speed = round(random.uniform(speed_range[0], speed_range[1]), 1)
-        max_energy_consumption = round(random.uniform(max_energy_consumption_range[0], max_energy_consumption_range[1]), 1)
-        time_to_turn_on = round(random.uniform(time_to_turn_on_range[0], time_to_turn_on_range[1]), 1)
-        time_to_turn_off = round(random.uniform(time_to_turn_off_range[0], time_to_turn_off_range[1]), 1)
-        state = state_list[i]
-        physical_machines.append((id, cpu, memory, speed, max_energy_consumption, time_to_turn_on, time_to_turn_off, state))
+        capacity = (random.choice(cpu_capacity), random.choice(memory_capacity))
+        features = (round(random.uniform(speed_range[0], speed_range[1]), 1), round(random.uniform(max_energy_consumption_range[0], max_energy_consumption_range[1]), 1))
+        state = (round(random.uniform(time_to_turn_on_range[0], time_to_turn_on_range[1]), 1), round(random.uniform(time_to_turn_off_range[0], time_to_turn_off_range[1]), 1), state_list[i])
+        physical_machines.append((id, capacity, features, state))
     return physical_machines
 
-def generate_virtual_machines(n, pm_count, requested_cpu, requested_memory, execution_time_range, expected_profit_range, migration_time_range, physical_machines):
+def generate_virtual_machines(n, pm_count, requested_cpu, requested_memory, execution_time_range, expected_profit_range, migration_time_range, allocation_time_range, physical_machines, running_percentage):
     if n == 0:
         return []
     virtual_machines = []
+    on_pms = [pm for pm in physical_machines if pm[3][2] == 1]  # List of ON physical machines
+    num_running = int(n * running_percentage / 100)
+
     for i in range(n):
         id = i
-        cpu = random.choice(requested_cpu)
-        memory = random.choice(requested_memory)
-        total_execution_time = round(random.uniform(execution_time_range[0], execution_time_range[1]), 1)
-        current_execution_time = round(random.uniform(0, total_execution_time), 1)
-        running_on_pm = random.randint(0, pm_count - 1)
+        requested = (random.choice(requested_cpu), random.choice(requested_memory))
         
-        # Ensure the PM is on if a VM is running on it
-        if physical_machines[running_on_pm][7] == 0:
-            physical_machines[running_on_pm] = (*physical_machines[running_on_pm][:-1], 1)
+        if i < num_running:
+            suitable_pms = [pm for pm in on_pms if pm[1][0] >= requested[0] and pm[1][1] >= requested[1]]
+            if suitable_pms:
+                allocated_pm = random.choice(suitable_pms)[0]
+                total_execution_time = round(random.uniform(execution_time_range[0], execution_time_range[1]), 1)
+                current_execution_time = round(random.uniform(0, total_execution_time), 1)
+                run = (current_execution_time, total_execution_time, allocated_pm)
+            else:
+                run = (0.0, round(random.uniform(execution_time_range[0], execution_time_range[1]), 1), -1)
+        else:
+            total_execution_time = round(random.uniform(execution_time_range[0], execution_time_range[1]), 1)
+            run = (0.0, total_execution_time, -1)
         
-        migration_total_time = round(random.uniform(migration_time_range[0], migration_time_range[1]), 1)
-        migration = (0.0, migration_total_time, -1)  # Not migrating initially
+        allocation_time = round(random.uniform(allocation_time_range[0], allocation_time_range[1]), 1)
+        allocation = (0.0, allocation_time, -1)
+        migration = (0.0, round(random.uniform(migration_time_range[0], migration_time_range[1]), 1), -1, -1)
+        group = random.randint(1, 10)  # Assuming groups are numbered from 1 to 10
         expected_profit = round(random.uniform(expected_profit_range[0], expected_profit_range[1]), 2)
-        virtual_machines.append((id, cpu, memory, current_execution_time, total_execution_time, running_on_pm, migration, expected_profit))
+        virtual_machines.append((id, requested, allocation, run, migration, group, expected_profit))
     return virtual_machines
 
 def format_physical_machines(physical_machines):
-    legend = "// <id, cpu_capacity, memory_capacity, speed, max_energy_consumption, time_to_turn_on, time_to_turn_off, state>\n"
+    legend = "// <id, capacity (cpu, memory), features (speed, max_energy_consumption), state (time_to_turn_on, time_to_turn_off, state)>\n"
     formatted_physical_machines = legend + "\nphysical_machines = {\n"
     for pm in physical_machines:
-        formatted_physical_machines += f"  <{pm[0]}, {pm[1]}, {pm[2]}, {pm[3]}, {pm[4]}, {pm[5]}, {pm[6]}, {pm[7]}>,\n"
+        formatted_physical_machines += f"  <{pm[0]}, <{pm[1][0]}, {pm[1][1]}>, <{pm[2][0]}, {pm[2][1]}>, <{pm[3][0]}, {pm[3][1]}, {pm[3][2]}>>,\n"
     formatted_physical_machines = formatted_physical_machines.rstrip(",\n") + "\n};"
     return formatted_physical_machines
 
 def format_virtual_machines(virtual_machines):
-    legend = "// <id, requested_cpu, requested_memory, current_execution_time, total_execution_time, running_on_pm, migration (remaining_time, total_time, from_pm), expected_profit>\n"
+    legend = "// <id, requested (cpu, memory), allocation (current_time, total_time, pm), run (current_time, total_time, pm), migration (current_time, total_time, from_pm, to_pm), group, expected_profit>\n"
     formatted_virtual_machines = legend + "\nvirtual_machines = {\n"
     for vm in virtual_machines:
-        formatted_virtual_machines += f"  <{vm[0]}, {vm[1]}, {vm[2]}, {vm[3]}, {vm[4]}, {vm[5]}, <{vm[6][0]}, {vm[6][1]}, {vm[6][2]}>, {vm[7]}>,\n"
+        formatted_virtual_machines += f"  <{vm[0]}, <{vm[1][0]}, {vm[1][1]}>, <{vm[2][0]}, {vm[2][1]}, {vm[2][2]}>, <{vm[3][0]}, {vm[3][1]}, {vm[3][2]}>, <{vm[4][0]}, {vm[4][1]}, {vm[4][2]}, {vm[4][3]}>, {vm[5]}, {vm[6]}>,\n"
     formatted_virtual_machines = formatted_virtual_machines.rstrip(",\n") + "\n};"
     return formatted_virtual_machines
 
@@ -87,7 +93,7 @@ else:
     num_virtual_machines = default_num_virtual_machines
 
 physical_machines = generate_physical_machines(num_physical_machines, pm_cpu_capacity, pm_memory_capacity, pm_speed_range, pm_max_energy_consumption_range, pm_time_to_turn_on_range, pm_time_to_turn_off_range, state_percentage)
-virtual_machines = generate_virtual_machines(num_virtual_machines, num_physical_machines, vm_requested_cpu, vm_requested_memory, execution_time_range, vm_expected_profit_range, migration_time_range, physical_machines)
+virtual_machines = generate_virtual_machines(num_virtual_machines, num_physical_machines, vm_requested_cpu, vm_requested_memory, execution_time_range, vm_expected_profit_range, migration_time_range, allocation_time_range, physical_machines, running_percentage)
 
 if physical_machines:
     formatted_physical_machines = format_physical_machines(physical_machines)

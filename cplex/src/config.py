@@ -15,5 +15,5 @@ MAIN_MODEL_PATH = os.path.join(BASE_PATH, 'model/main.mod')
 # Simulation parameters
 TIME_STEP = 1.0  
 NEW_VMS_PER_STEP = 2  # Number of new VMs to generate at each time step
-NUM_TIME_STEPS = 12 # Number of time steps to simulate
+NUM_TIME_STEPS = 20 # Number of time steps to simulate
 
