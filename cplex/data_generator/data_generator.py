@@ -2,13 +2,59 @@ import random
 import os
 import sys
 from config import (
-    pm_config, vm_config, default_values, data_folder_path,
-    pm_cpu_capacity, pm_memory_capacity, pm_speed_range, pm_max_energy_consumption_range, pm_time_to_turn_on_range, pm_time_to_turn_off_range,
-    vm_requested_cpu, vm_requested_memory, execution_time_range, vm_expected_profit_range, migration_time_range, allocation_time_range,
-    default_num_physical_machines, default_num_virtual_machines, state_percentage, running_percentage
+    pm_config, vm_config, network_config, default_values, data_folder_path,
+    pm_cpu_capacity, pm_memory_capacity, pm_speed_range, pm_time_to_turn_on_range, pm_time_to_turn_off_range,
+    vm_requested_cpu, vm_requested_memory, execution_time_range, allocation_time_range,
+    default_num_physical_machines, default_num_virtual_machines, state_percentage, running_percentage, latency_range,
+    network_bandwidth
 )
 
-def generate_physical_machines(n, cpu_capacity, memory_capacity, speed_range, max_energy_consumption_range, time_to_turn_on_range, time_to_turn_off_range, state_percentage):
+def calculate_power_consumption(cpu_cores, memory_gb):
+    coefficients = {
+        100: (83.0644746, 6.0964415, 0.5139661),
+        90: (82.5614426, 5.5197877, 0.4595581),
+        80: (81.6742473, 4.6824576, 0.3533578),
+        70: (81.9473742, 4.1679360, 0.2691661),
+        60: (82.3141742, 3.6856765, 0.2224509),
+        50: (80.3144091, 3.2768073, 0.1894818),
+        40: (77.0713074, 2.9314441, 0.1659522),
+        30: (73.2398958, 2.5875709, 0.1535889),
+        20: (71.1406676, 2.2450947, 0.1411264),
+        10: (67.2681725, 1.8924068, 0.1295687),
+        0: (54.49687195, 1.10934463, 0.09091585),
+    }
+    
+    power_consumption = []
+    for load, (intercept, core_coeff, memory_coeff) in sorted(coefficients.items()):
+        power = intercept + (core_coeff * cpu_cores) + (memory_coeff * memory_gb)
+        power_consumption.append((load / 100.0, round(power, 2)))
+    
+    return power_consumption
+
+def generate_latency_matrix(n, latency_range):
+    latency_matrix = []
+    for i in range(n):
+        latencies = []
+        for j in range(n):
+            if i == j:
+                latencies.append(0.0)
+            else:
+                latencies.append(round(random.uniform(latency_range[0], latency_range[1]), 2))
+        latency_matrix.append(latencies)
+    return latency_matrix
+
+def generate_speed(speed_range):
+    # Generate a random speed such that the "average" speed is 1 in the speed sense.
+    # Using inverse sampling to ensure higher speeds are less common.
+    lower, upper = speed_range
+    while True:
+        speed = round(random.uniform(lower, upper), 1)
+        # Calculate a weight inversely proportional to the speed (this ensures average speed of 1)
+        probability = 1 / speed
+        if random.random() < probability:
+            return speed
+
+def generate_physical_machines(n, cpu_capacity, memory_capacity, speed_range, time_to_turn_on_range, time_to_turn_off_range, state_percentage):
     if n == 0:
         return []
     physical_machines = []
@@ -18,17 +64,26 @@ def generate_physical_machines(n, cpu_capacity, memory_capacity, speed_range, ma
     
     for i in range(n):
         id = i
-        capacity = (random.choice(cpu_capacity), random.choice(memory_capacity))
-        features = (round(random.uniform(speed_range[0], speed_range[1]), 1), round(random.uniform(max_energy_consumption_range[0], max_energy_consumption_range[1]), 1))
-        state = (round(random.uniform(time_to_turn_on_range[0], time_to_turn_on_range[1]), 1), round(random.uniform(time_to_turn_off_range[0], time_to_turn_off_range[1]), 1), state_list[i])
-        physical_machines.append((id, capacity, features, state))
+        cpu = random.choice(cpu_capacity)
+        memory = random.choice(memory_capacity)
+        capacity = (cpu, memory)
+        speed = generate_speed(speed_range)
+        features = (speed,)
+        state = (
+            round(random.uniform(time_to_turn_on_range[0], time_to_turn_on_range[1]), 1), 
+            round(random.uniform(time_to_turn_off_range[0], time_to_turn_off_range[1]), 1), 
+            (0.0, 0.0),  # Initialize loads to 0
+            state_list[i]
+        )
+        power_consumption = calculate_power_consumption(cpu, memory)
+        physical_machines.append((id, capacity, features, state, power_consumption))
     return physical_machines
 
-def generate_virtual_machines(n, pm_count, requested_cpu, requested_memory, execution_time_range, expected_profit_range, migration_time_range, allocation_time_range, physical_machines, running_percentage):
+def generate_virtual_machines(n, pm_count, requested_cpu, requested_memory, execution_time_range, allocation_time_range, physical_machines, running_percentage):
     if n == 0:
         return []
     virtual_machines = []
-    on_pms = [pm for pm in physical_machines if pm[3][2] == 1]  # List of ON physical machines
+    on_pms = [pm for pm in physical_machines if pm[3][3] == 1]  # List of ON physical machines
     num_running = int(n * running_percentage / 100)
 
     for i in range(n):
@@ -50,27 +105,67 @@ def generate_virtual_machines(n, pm_count, requested_cpu, requested_memory, exec
         
         allocation_time = round(random.uniform(allocation_time_range[0], allocation_time_range[1]), 1)
         allocation = (0.0, allocation_time, -1)
-        migration = (0.0, round(random.uniform(migration_time_range[0], migration_time_range[1]), 1), -1, -1)
+        migration_time = round(requested[1] / network_bandwidth, 1)  # Calculate migration time based on memory size and network bandwidth
+        migration = (0.0, migration_time, -1, -1)
         group = random.randint(1, 10)  # Assuming groups are numbered from 1 to 10
-        expected_profit = round(random.uniform(expected_profit_range[0], expected_profit_range[1]), 2)
-        virtual_machines.append((id, requested, allocation, run, migration, group, expected_profit))
+        virtual_machines.append((id, requested, allocation, run, migration, group))
     return virtual_machines
 
+def update_physical_machine_loads(physical_machines, virtual_machines):
+    # Initialize loads to 0
+    pm_loads = {pm[0]: {"cpu_load": 0.0, "memory_load": 0.0} for pm in physical_machines}
+    
+    # Update loads based on running VMs
+    for vm in virtual_machines:
+        allocated_pm = vm[3][2]
+        if allocated_pm != -1:
+            pm_loads[allocated_pm]["cpu_load"] += vm[1][0]
+            pm_loads[allocated_pm]["memory_load"] += vm[1][1]
+    
+    # Update physical machines with the new loads
+    updated_physical_machines = []
+    for pm in physical_machines:
+        id, capacity, features, state, power_consumption = pm
+        cpu_load = pm_loads[id]["cpu_load"]
+        memory_load = pm_loads[id]["memory_load"]
+        updated_state = (state[0], state[1], (cpu_load, memory_load), state[3])
+        updated_physical_machines.append((id, capacity, features, updated_state, power_consumption))
+    
+    return updated_physical_machines
+
 def format_physical_machines(physical_machines):
-    legend = "// <id, capacity (cpu, memory), features (speed, max_energy_consumption), state (time_to_turn_on, time_to_turn_off, state)>\n"
+    legend = "// <id, capacity (cpu, memory), features (speed), state (time_to_turn_on, time_to_turn_off, load (cpu_load, memory_load), state)>\n"
     formatted_physical_machines = legend + "\nphysical_machines = {\n"
     for pm in physical_machines:
-        formatted_physical_machines += f"  <{pm[0]}, <{pm[1][0]}, {pm[1][1]}>, <{pm[2][0]}, {pm[2][1]}>, <{pm[3][0]}, {pm[3][1]}, {pm[3][2]}>>,\n"
+        formatted_physical_machines += (
+            f"  <{pm[0]}, <{pm[1][0]}, {pm[1][1]}>, <{pm[2][0]}>, <{pm[3][0]}, {pm[3][1]}, <{pm[3][2][0]}, {pm[3][2][1]}>, {pm[3][3]}>>,\n"
+        )
     formatted_physical_machines = formatted_physical_machines.rstrip(",\n") + "\n};"
     return formatted_physical_machines
 
 def format_virtual_machines(virtual_machines):
-    legend = "// <id, requested (cpu, memory), allocation (current_time, total_time, pm), run (current_time, total_time, pm), migration (current_time, total_time, from_pm, to_pm), group, expected_profit>\n"
+    legend = "// <id, requested (cpu, memory), allocation (current_time, total_time, pm), run (current_time, total_time, pm), migration (current_time, total_time, from_pm, to_pm), group>\n"
     formatted_virtual_machines = legend + "\nvirtual_machines = {\n"
     for vm in virtual_machines:
-        formatted_virtual_machines += f"  <{vm[0]}, <{vm[1][0]}, {vm[1][1]}>, <{vm[2][0]}, {vm[2][1]}, {vm[2][2]}>, <{vm[3][0]}, {vm[3][1]}, {vm[3][2]}>, <{vm[4][0]}, {vm[4][1]}, {vm[4][2]}, {vm[4][3]}>, {vm[5]}, {vm[6]}>,\n"
+        formatted_virtual_machines += f"  <{vm[0]}, <{vm[1][0]}, {vm[1][1]}>, <{vm[2][0]}, {vm[2][1]}, {vm[2][2]}>, <{vm[3][0]}, {vm[3][1]}, {vm[3][2]}>, <{vm[4][0]}, {vm[4][1]}, {vm[4][2]}, {vm[4][3]}>, {vm[5]}>,\n"
     formatted_virtual_machines = formatted_virtual_machines.rstrip(",\n") + "\n};"
     return formatted_virtual_machines
+
+def format_latency_matrix(latency_matrix):
+    formatted_latency = "latency = [\n"
+    for row in latency_matrix:
+        formatted_latency += "  [" + ", ".join(map(str, row)) + "],\n"
+    formatted_latency = formatted_latency.rstrip(",\n") + "\n];"
+    return formatted_latency
+
+def format_power_function(physical_machines):
+    formatted_power_function = "nb_points = 11;\n\n"
+    formatted_power_function += "power_function = [\n"
+    for pm in physical_machines:
+        points = ", ".join(f"<{point[0]}, {point[1]}>" for point in pm[4])
+        formatted_power_function += f"  [{points}],\n"
+    formatted_power_function = formatted_power_function.rstrip(",\n") + "\n];"
+    return formatted_power_function
 
 def generate_unique_filename(base_path, base_name, extension):
     version = 1
@@ -92,25 +187,42 @@ else:
     num_physical_machines = default_num_physical_machines
     num_virtual_machines = default_num_virtual_machines
 
-physical_machines = generate_physical_machines(num_physical_machines, pm_cpu_capacity, pm_memory_capacity, pm_speed_range, pm_max_energy_consumption_range, pm_time_to_turn_on_range, pm_time_to_turn_off_range, state_percentage)
-virtual_machines = generate_virtual_machines(num_virtual_machines, num_physical_machines, vm_requested_cpu, vm_requested_memory, execution_time_range, vm_expected_profit_range, migration_time_range, allocation_time_range, physical_machines, running_percentage)
+latency_matrix = generate_latency_matrix(num_physical_machines, latency_range)
+physical_machines = generate_physical_machines(num_physical_machines, pm_cpu_capacity, pm_memory_capacity, pm_speed_range, pm_time_to_turn_on_range, pm_time_to_turn_off_range, state_percentage)
+virtual_machines = generate_virtual_machines(num_virtual_machines, num_physical_machines, vm_requested_cpu, vm_requested_memory, execution_time_range, allocation_time_range, physical_machines, running_percentage)
+
+# Update physical machine loads based on the virtual machines
+physical_machines = update_physical_machine_loads(physical_machines, virtual_machines)
 
 if physical_machines:
     formatted_physical_machines = format_physical_machines(physical_machines)
+    formatted_latency_matrix = format_latency_matrix(latency_matrix)
+    formatted_power_function = format_power_function(physical_machines)
+    
     base_path = os.path.expanduser(data_folder_path)
     os.makedirs(base_path, exist_ok=True)
+    
     pm_base_name = f"physical_machines_{num_physical_machines}"
     pm_file_path = generate_unique_filename(base_path, pm_base_name, 'dat')
+    
     with open(pm_file_path, 'w') as pm_file:
         pm_file.write(formatted_physical_machines)
+        pm_file.write("\n\n")
+        pm_file.write(formatted_latency_matrix)
+        pm_file.write("\n\n")
+        pm_file.write(formatted_power_function)
+    
     print(f"Physical machines data saved to {pm_file_path}")
 
 if virtual_machines:
     formatted_virtual_machines = format_virtual_machines(virtual_machines)
     base_path = os.path.expanduser(data_folder_path)
     os.makedirs(base_path, exist_ok=True)
+    
     vm_base_name = f"virtual_machines_{num_virtual_machines}"
     vm_file_path = generate_unique_filename(base_path, vm_base_name, 'dat')
+    
     with open(vm_file_path, 'w') as vm_file:
         vm_file.write(formatted_virtual_machines)
+    
     print(f"Virtual machines data saved to {vm_file_path}")

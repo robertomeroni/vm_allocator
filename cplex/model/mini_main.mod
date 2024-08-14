@@ -4,7 +4,7 @@ main {
   var inputFolderPath = "/home/roberto/job/vm_allocator/cplex/simulation/model_input/";
 
   // Define file names
-  var modelFile = "vm_allocation.mod";
+  var modelFile = "vm_allocation_mini.mod";
   var physicalMachinesFile = "physical_machines.dat";
   var virtualMachinesFile = "virtual_machines.dat";
   var weightsFile = "weights.dat";
@@ -39,15 +39,9 @@ main {
   model.generate();
   
   if (cplex.solve()) {
-    writeln("\nMAIN MODEL\n")
+    writeln("\nMINI MODEL\n")
     writeln(model.printSolution());
     
-    write("is_removal = [");
-    for (var vm in model.virtual_machines) {
-      write(" " + model.is_removal[vm]);
-    }
-	write(" ]\n");
-	
     write("cpu_load = [");
     for (var pm in model.physical_machines) {
       if (model.is_fully_turned_on[pm])

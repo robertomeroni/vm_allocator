@@ -1,32 +1,41 @@
 import random
+from weights import price, migration
 
 def generate_new_vms(active_vms, new_vms_per_step, existing_ids):
     for _ in range(new_vms_per_step):
         new_vm_id = generate_unique_id(existing_ids)
+        requested_cpu = random.choice([1, 2, 4, 8, 16])
+        requested_memory = random.choice([4, 8, 16, 32, 64])
+        run_total_time = random.uniform(30.0, 600.0)
+
+        profit = (requested_cpu * price['cpu'] + requested_memory * price['memory']) * run_total_time
+
+        migration_total_time = migration['time']['offset'] + migration['time']['coefficient'] * requested_memory
+
         new_vm = {
             'id': new_vm_id,
             'requested': {
-                'cpu': random.choice([1, 2, 4, 8, 16]),
-                'memory': random.choice([4, 8, 16, 32, 64])
+                'cpu': requested_cpu,
+                'memory': requested_memory
             },
             'allocation': {
                 'current_time': 0.0,
-                'total_time': round(random.uniform(1.0, 3.0), 1),
+                'total_time': round(random.uniform(1.0, 10.0), 0),
                 'pm': -1  # New VM is not running on any physical machine initially
             },
             'run': {
                 'current_time': 0.0,
-                'total_time': round(random.uniform(1.0, 10.0), 1),
-                'pm': -1  # New VM is not running on any physical machine initially
+                'total_time': round(run_total_time, 0),
+                'pm': -1
             },
             'migration': {
                 'current_time': 0.0,
-                'total_time': round(random.uniform(1.0, 3.0), 1),
-                'from_pm': -1,  # New VM is not migrating from any physical machine initially
-                'to_pm': -1  # New VM is not migrating on any physical machine initially
+                'total_time': round(migration_total_time, 5),
+                'from_pm': -1,
+                'to_pm': -1
             },
-            'group': random.randint(1, 5),  # Random group for co-allocation preference
-            'expected_profit': round(random.uniform(100.0, 1000.0), 2)
+            'group': random.randint(1, 10),  
+            'profit': round(profit, 5)  # Calculated profit based on requested resources
         }
         active_vms.append(new_vm)
         existing_ids.add(new_vm_id)

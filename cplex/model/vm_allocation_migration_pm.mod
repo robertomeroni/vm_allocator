@@ -127,13 +127,17 @@ dvar boolean is_running_on[virtual_machines][physical_machines];
 dvar boolean is_migration[virtual_machines];
 dvar boolean is_migrating_on[virtual_machines][physical_machines];
 dvar boolean is_migrating_from[virtual_machines][physical_machines];
+dvar boolean is_wait[virtual_machines];
+dvar boolean is_waiting_on[virtual_machines][physical_machines];
 dvar boolean is_first_migration[virtual_machines];
+dvar boolean ongoing_migration[physical_machines];
+dvar boolean pm_allocation[virtual_machines][physical_machines];
 
 // Expressions
 dexpr float cpu_load[pm in physical_machines] = (1 / pm.capacity.cpu) * sum(vm in virtual_machines) vm.requested.cpu * new_allocation[vm][pm];
 dexpr float memory_load[pm in physical_machines] = (1 / pm.capacity.memory) * sum(vm in virtual_machines) vm.requested.memory * new_allocation[vm][pm]; 
-dexpr float cpu_load_migration[pm in physical_machines] = (1 / pm.capacity.cpu) * sum(vm in virtual_machines) vm.requested.cpu * (new_allocation[vm][pm] + is_migrating_from[vm][pm] - is_allocating_on[vm][pm]);
-dexpr float memory_load_migration[pm in physical_machines] = (1 / pm.capacity.memory) * sum(vm in virtual_machines) vm.requested.memory * (new_allocation[vm][pm] + is_migrating_from[vm][pm] - is_allocating_on[vm][pm]); 
+dexpr float pm_cpu_load[pm in physical_machines] = (1 / pm.capacity.cpu) * sum(vm in virtual_machines) vm.requested.cpu * (pm_allocation[vm][pm] + is_migrating_from[vm][pm]);
+dexpr float pm_memory_load[pm in physical_machines] = (1 / pm.capacity.memory) * sum(vm in virtual_machines) vm.requested.memory * (pm_allocation[vm][pm] + is_migrating_from[vm][pm]); 
 dexpr int turn_on[pm in physical_machines] = (1 - pm.s.state) * is_on[pm];  
 dexpr int turn_off[pm in physical_machines] = pm.s.state * (1 - is_on[pm]); 
 dexpr int is_added[vm in virtual_machines] = (1 - sum(pm in physical_machines) old_allocation[vm][pm]) * sum(pm in physical_machines) new_allocation[vm][pm];
@@ -157,6 +161,8 @@ PMWeights w_pm[pm in physical_machines] =
 // Profit from running a Virtual Machine
 float profit[vm in virtual_machines] = (vm.requested.cpu * price.cpu + vm.requested.memory * price.memory);
 float migration_energy[vm in virtual_machines] = migration_energy_parameters.offset + migration_energy_parameters.coefficient * vm.requested.memory;
+
+int M = card(virtual_machines);
 
 // Model
 //minimize   sum(pm in physical_machines) (
@@ -235,6 +241,8 @@ float migration_energy[vm in virtual_machines] = migration_energy_parameters.off
 //		         // migration case
 //		         + is_migrating_on[vm][pm] * time_window * profit[vm] * vm.run.total_time   															// total profit
 //		         / ((remaining_run_time[vm] + remaining_migration_time[vm] * migration_penalty) / pm.features.speed)                    // effective remaining time
+////				 + is_waiting_on[vm][pm] * profit[vm] * vm.run.total_time / ((remaining_allocation_time[vm] + remaining_run_time[vm]) / pm.features.speed + remaining_waiting_time[vm]) // waiting for migration case		       	
+//                 - 100000*is_wait[vm]		       
 //		       )		   
 //		   );
 
@@ -262,11 +270,16 @@ float migration_energy[vm in virtual_machines] = migration_energy_parameters.off
 //		         + is_migrating_on[vm][pm] * profit[vm] * vm.run.total_time   															// total profit
 //		         / ((remaining_run_time[vm] + remaining_migration_time[vm] * migration_penalty) / pm.features.speed)                    // effective remaining time
 //		         * minl(time_window, (remaining_run_time[vm] + remaining_migration_time[vm] * migration_penalty) / pm.features.speed)   // min between time window and effective remaining time 
+////				 + is_waiting_on[vm][pm] * profit[vm] * vm.run.total_time / ((remaining_allocation_time[vm] + remaining_run_time[vm]) / pm.features.speed + remaining_waiting_time[vm]) // waiting for migration case		       	
+//                 - 100000*is_wait[vm]		       
 //		       )		   
 //		   );
 
 // Objective Function time window
-maximize   sum(pm in physical_machines) ( 
+maximize   sum (vm in virtual_machines) ( 
+		 	 - PUE * energy.cost * migration_energy[vm] * is_migration[vm] / remaining_migration_time[vm]
+		   ) 
+		 + sum(pm in physical_machines) ( 
 	         - PUE * energy.cost * (
 		             w_pm[pm].turn_on.power * turn_on[pm] * minl(time_window, pm.s.time_to_turn_on)
 		           + w_pm[pm].turn_off.power * turn_off[pm] * minl(time_window, pm.s.time_to_turn_off)
@@ -275,19 +288,16 @@ maximize   sum(pm in physical_machines) (
                )
 		     + sum (vm in virtual_machines) ( 
 		     	 // allocation case
-        		   is_allocating_on[vm][pm] * time_window * profit[vm] * vm.run.total_time                                                  // total profit
+        		   is_allocating_on[vm][pm] * time_window * profit[vm] * vm.run.total_time                                                                // total profit
         		 / (pm.s.time_to_turn_on + (remaining_allocation_time[vm] + remaining_run_time[vm]) / pm.features.speed)                    // effective remaining time
         		 // run case
         		 + is_running_on[vm][pm] * time_window * profit[vm] * vm.run.total_time          // total profit
-        		 / (remaining_run_time[vm] / pm.features.speed)                                  // effective remaining time
+        		 / (remaining_run_time[vm] / pm.features.speed)                    // effective remaining time
 		         // migration case
-		         + is_migrating_on[vm][pm] * (
-		               time_window * profit[vm] * vm.run.total_time   															                  // total profit
-		             / (pm.s.time_to_turn_on + remaining_run_time[vm] / pm.features.speed + remaining_migration_time[vm] * migration_penalty)     // effective remaining time
-		       
-		             - PUE * energy.cost * migration_energy[vm]   // energy cost of migration
-		           )
-		 	     - is_migrating_from[vm][pm] * profit[vm] * remaining_migration_time[vm] * pm.features.speed   // time costs of migration (resources in the "migrating from PM" are occupied, but profit for newly allocated VMs on this PM are already accounted)
+		         + is_migrating_on[vm][pm] * time_window * profit[vm] * vm.run.total_time   															// total profit
+		         / (pm.s.time_to_turn_on + (remaining_run_time[vm] + remaining_migration_time[vm] * migration_penalty) / pm.features.speed)                    // effective remaining time
+//				 + is_waiting_on[vm][pm] * profit[vm] * vm.run.total_time / ((remaining_allocation_time[vm] + remaining_run_time[vm]) / pm.features.speed + remaining_waiting_time[vm]) // waiting for migration case		       	
+                 - 100000*is_wait[vm]		       
 		       )		   
 		   );
 			   
@@ -302,15 +312,13 @@ subject to {
   forall (vm in virtual_machines) {
     sum (pm in physical_machines) new_allocation[vm][pm] <= 1;
   } 
-  // Physical Machine CPU and Memory capacity
+  // Physical Machine CPU capacity
   forall(pm in physical_machines) {
     cpu_load[pm] <= 1; 
-    memory_load[pm] <= 1; 
   }
-  // Physical Machine CPU and Memory capacity during migration
+  // Physical Machine Memory capacity
   forall(pm in physical_machines) {
-    cpu_load_migration[pm] <= 1;
-    memory_load_migration[pm] <= 1;
+    memory_load[pm] <= 1; 
   } 
   // To enter in a state, Virtual Machine has to be allocated
   forall (vm in virtual_machines) {
@@ -321,9 +329,9 @@ subject to {
     is_migration[vm] <= sum(pm in physical_machines) new_allocation[vm][pm];
     is_allocation[vm] + is_run[vm] + is_migration[vm] <= sum(pm in physical_machines) new_allocation[vm][pm];
   } 
-  // If a Virtual Machine is added or if it was allocating and is not removal, VM state is an allocation
+  // If a Virtual Machine is added and is not wait or if it was allocating and is not removal, VM state is an allocation
   forall (vm in virtual_machines) {
-	is_allocation[vm] >= is_added[vm];
+	is_wait[vm] + is_allocation[vm] >= is_added[vm];
 	is_removal[vm] + is_allocation[vm] >= was_allocating[vm];
   }
   // A Virtual Machine cannot go from running or migrating state to allocation state 
@@ -400,9 +408,32 @@ subject to {
   forall (pm in physical_machines) {
     is_on[pm] >= sum(vm in virtual_machines) is_migrating_from[vm][pm];
   }
+  // A migration is happening on the PM
+  forall (pm in physical_machines) {
+    ongoing_migration[pm] <= sum(vm in virtual_machines) is_migrating_from[vm][pm];
+    M * ongoing_migration[pm] >= sum(vm in virtual_machines) is_migrating_from[vm][pm];
+  }
+  forall (pm in physical_machines) {
+    forall (vm in virtual_machines) {
+      pm_allocation[vm][pm] <= new_allocation[vm][pm];
+      ongoing_migration[pm] + pm_allocation[vm][pm] >= new_allocation[vm][pm];
+    }
+  }
+  forall (pm in physical_machines) {
+	pm_cpu_load[pm] <= 1;
+	pm_memory_load[pm] <= 1;
+  }
+  // Iff VM is assigned to PM in new_allocation and is a wait, VM is waiting on PM
+  forall (vm in virtual_machines) {
+    forall (pm in physical_machines) {
+  	   is_wait[vm] + new_allocation[vm][pm] <= 1 + is_waiting_on[vm][pm];
+  	   is_waiting_on[vm][pm] <= is_wait[vm];
+  	   is_waiting_on[vm][pm] <= new_allocation[vm][pm];
+    }  
+  }  
   // Uniqueness of Virtual Machine state
   forall (vm in virtual_machines) {
-    is_allocation[vm] + is_run[vm] + is_migration[vm] + is_removal[vm] <= 1; 
-    is_allocation[vm] + is_run[vm] + is_migration[vm] + is_removal[vm] >= sum(pm in physical_machines) old_allocation[vm][pm]; 
+    is_wait[vm] + is_allocation[vm] + is_run[vm] + is_migration[vm] + is_removal[vm] <= 1; 
+    is_wait[vm] + is_allocation[vm] + is_run[vm] + is_migration[vm] + is_removal[vm] >= sum(pm in physical_machines) old_allocation[vm][pm]; 
   }
 }

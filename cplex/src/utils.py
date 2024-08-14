@@ -1,7 +1,9 @@
 import os
 import re
 import json
-from config import MODEL_INPUT_FOLDER_PATH
+import datetime
+from config import MODEL_INPUT_FOLDER_PATH, LOGS_FOLDER_PATH
+from weights import main_time_step, time_window, price, migration, network_bandwidth, pue, energy, w_load_cpu
 
 def load_virtual_machines(file_path):
     if not os.path.exists(file_path):
@@ -12,6 +14,7 @@ def load_virtual_machines(file_path):
     try:
         vm_lines = data.split('virtual_machines = {')[1].split('};')[0].strip().split('\n')
     except IndexError:
+        print()
         raise ValueError(f"Error in loading virtual machines: Check the format of {file_path}")
     
     vms = []
@@ -40,25 +43,28 @@ def load_virtual_machines(file_path):
                 'from_pm': int(parts[11]),
                 'to_pm': int(parts[12])
             },
-            'group': int(parts[13]),
-            'expected_profit': float(parts[14].strip('>'))
+            'group': int(parts[13].strip('>'))
         }
         vms.append(vm)
     return vms
 
 def load_physical_machines(file_path):
     if not os.path.exists(file_path):
-        print(f"File {file_path} not found. Initializing an empty set of physical machines.")
-        return []
+        print(f"File {file_path} not found. Initializing an empty set of physical machines and latency matrix.")
+        return [], []
+
     with open(file_path, 'r') as file:
         data = file.read()
+
     try:
-        pm_lines = data.split('physical_machines = {')[1].split('};')[0].strip().split('\n')
+        pm_section = data.split('physical_machines = {')[1].split('};')[0].strip().split('\n')
+        latency_section = data.split('latency = [')[1].split('];')[0].strip().split('\n')
     except IndexError:
-        raise ValueError(f"Error in loading physical machines: Check the format of {file_path}")
-    
+        print()
+        raise ValueError(f"Error in loading physical machines or latency matrix: Check the format of {file_path}")
+
     pms = []
-    for line in pm_lines:
+    for line in pm_section:
         line = line.strip().strip('<').strip('>')
         parts = [part.strip().strip('<').strip('>') for part in line.split(',')]
         pm = {
@@ -68,17 +74,57 @@ def load_physical_machines(file_path):
                 'memory': int(parts[2])
             },
             'features': {
-                'speed': float(parts[3]),
-                'max_energy_consumption': float(parts[4])
+                'speed': float(parts[3])
             },
             's': {
-                'time_to_turn_on': float(parts[5]),
-                'time_to_turn_off': float(parts[6]),
-                'state': int(parts[7].strip('>'))
+                'time_to_turn_on': float(parts[4]),
+                'time_to_turn_off': float(parts[5]),
+                'load': {
+                    'cpu': float(parts[6]),
+                    'memory': float(parts[7])
+                },
+                'state': int(parts[8])
             }
         }
         pms.append(pm)
-    return pms
+
+    latency_matrix = []
+    for line in latency_section:
+        row = [float(value.strip()) for value in line.strip().replace('[', '').replace(']', '').split(',') if value.strip()]
+        latency_matrix.append(row)
+
+    return pms, latency_matrix
+
+def load_configuration(folder_path):
+    weights_data = f"""
+main_time_step = {main_time_step};
+
+time_window = {time_window};
+
+price = <{price['cpu']}, {price['memory']}>;
+
+energy = <{energy['cost']}, {energy['limit']}>;
+
+PUE = {pue};
+
+network_bandwidth = {network_bandwidth};
+
+migration_energy_parameters = <{migration['energy']['offset']}, {migration['energy']['coefficient']}>;
+
+migration_penalty = {migration['penalty']};
+
+w_load_cpu = {w_load_cpu};
+"""
+
+    # Ensure the model input folder exists
+    os.makedirs(folder_path, exist_ok=True)
+
+    # Define the path to the weights.dat file
+    weights_file_path = os.path.join(folder_path, 'weights.dat')
+
+    # Write the configuration to the weights.dat file
+    with open(weights_file_path, 'w') as file:
+        file.write(weights_data)
 
 def save_vm_sets(active_vms, terminated_vms, step, output_folder_path):
     active_file_path = os.path.join(output_folder_path, f'active_vms_t{step}.json')
@@ -88,17 +134,48 @@ def save_vm_sets(active_vms, terminated_vms, step, output_folder_path):
     with open(terminated_file_path, 'w') as file:
         json.dump(terminated_vms, file, indent=4)
 
+def save_latency_matrix(latency_matrix, model_input_folder_path):
+    latency_file_path = os.path.join(model_input_folder_path, 'latency.dat')
+    with open(latency_file_path, 'w') as file:
+        file.write('latency = [\n')
+        for row in latency_matrix:
+            file.write('  [' + ', '.join(map(str, row)) + '],\n')
+        file.write('];\n')
+
+def save_power_function(file_path, model_input_folder_path):
+    if not os.path.exists(file_path):
+        print(f"File {file_path} not found.")
+        return
+
+    with open(file_path, 'r') as file:
+        data = file.read()
+
+    try:
+        power_function_section = data.split('power_function = [')[1].split('];')[0].strip() + '];'
+        nb_points_section = data.split('nb_points = ')[1].split(';')[0].strip() + ';'
+    except IndexError:
+        print()
+        raise ValueError(f"Error in loading power function or nb_points: Check the format of {file_path}")
+
+    power_function_file_path = os.path.join(model_input_folder_path, 'power_consumption.dat')
+    with open(power_function_file_path, 'w') as file:
+        file.write('nb_points = ' + nb_points_section + '\n\n')
+        file.write('power_function = [\n')
+        file.write(power_function_section)
+        file.write('\n')
+
+
 def convert_vms_to_model_input_format(vms):
     formatted_vms = "virtual_machines = {\n"
     for vm in vms:
-        formatted_vms += f"  <{vm['id']}, <{vm['requested']['cpu']}, {vm['requested']['memory']}>, <{vm['allocation']['current_time']}, {vm['allocation']['total_time']}, {vm['allocation']['pm']}>, <{vm['run']['current_time']}, {vm['run']['total_time']}, {vm['run']['pm']}>, <{vm['migration']['current_time']}, {vm['migration']['total_time']}, {vm['migration']['from_pm']}, {vm['migration']['to_pm']}>, {vm['group']}, {vm['expected_profit']}>,\n"
+        formatted_vms += f"  <{vm['id']}, <{vm['requested']['cpu']}, {vm['requested']['memory']}>, <{vm['allocation']['current_time']}, {vm['allocation']['total_time']}, {vm['allocation']['pm']}>, <{vm['run']['current_time']}, {vm['run']['total_time']}, {vm['run']['pm']}>, <{vm['migration']['current_time']}, {vm['migration']['total_time']}, {vm['migration']['from_pm']}, {vm['migration']['to_pm']}>, {vm['group']}>,\n"
     formatted_vms = formatted_vms.rstrip(",\n") + "\n};"
     return formatted_vms
 
 def convert_pms_to_model_input_format(pms):
     formatted_pms = "physical_machines = {\n"
     for pm in pms:
-        formatted_pms += f"  <{pm['id']}, <{pm['capacity']['cpu']}, {pm['capacity']['memory']}>, <{pm['features']['speed']}, {pm['features']['max_energy_consumption']}>, <{pm['s']['time_to_turn_on']}, {pm['s']['time_to_turn_off']}, {pm['s']['state']}>>, \n"
+        formatted_pms += f"  <{pm['id']}, <{pm['capacity']['cpu']}, {pm['capacity']['memory']}>, <{pm['features']['speed']}>, <{pm['s']['time_to_turn_on']}, {pm['s']['time_to_turn_off']}, <{pm['s']['load']['cpu']}, {pm['s']['load']['memory']}>, {pm['s']['state']}>>, \n"
     formatted_pms = formatted_pms.rstrip(",\n") + "\n};"
     return formatted_pms
 
@@ -117,6 +194,11 @@ def save_model_input_format(vms, pms, step, model_input_folder_path):
     
     return vm_model_input_file_path, pm_model_input_file_path
 
+def flatten_is_on(is_on):
+    if isinstance(is_on[0], list):
+        return [state for sublist in is_on for state in sublist]
+    return is_on
+
 def parse_opl_output(output):
     parsed_data = {}
     
@@ -128,9 +210,9 @@ def parse_opl_output(output):
         'is_allocation': re.compile(r'is_allocation = \[(.*?)\];', re.DOTALL),
         'is_run': re.compile(r'is_run = \[(.*?)\];', re.DOTALL),
         'is_migration': re.compile(r'is_migration = \[(.*?)\];', re.DOTALL),
-        'is_removal': re.compile(r'is_removal = \[(.*?)\];', re.DOTALL),
-        'cpu_load': re.compile(r'cpu_load = \[(.*?)\];', re.DOTALL),
-        'memory_load': re.compile(r'memory_load = \[(.*?)\];', re.DOTALL)
+        'is_removal': re.compile(r'is_removal = \[(.*?)\]'),
+        'cpu_load': re.compile(r'cpu_load = \[(.*?)\]'),
+        'memory_load': re.compile(r'memory_load = \[(.*?)\]'),
     }
     
     for key, pattern in patterns.items():
@@ -148,6 +230,62 @@ def parse_matrix(matrix_str):
         [int(num) if num.isdigit() else float(num) for num in row.strip().split()]
         for row in matrix_str.strip().split(']\n             [')
     ]
+
+def parse_power_function(file_path, pm_ids):
+    with open(file_path, 'r') as file:
+        data = file.read()
+
+    nb_points_match = re.search(r'nb_points\s*=\s*(\d+);', data)
+    if nb_points_match:
+        nb_points = int(nb_points_match.group(1))
+    else:
+        print()
+        raise ValueError("Could not find nb_points in the file.")
+
+    power_function_match = re.search(r'power_function\s*=\s*\[\s*(.*?)\s*\];', data, re.DOTALL)
+    if power_function_match:
+        power_function_str = power_function_match.group(1)
+    else:
+        print()
+        raise ValueError("Could not find power_function in the file.")
+
+    piecewise_linear_functions = {}
+    row_pattern = re.compile(r'\[(.*?)\]')
+    
+    for pm_id, row_match in zip(pm_ids, row_pattern.finditer(power_function_str)):
+        row_str = row_match.group(1)
+        row = []
+        pair_pattern = re.compile(r'<\s*([\d\.]+)\s*,\s*([\d\.]+)\s*>')
+        for pair_match in pair_pattern.finditer(row_str):
+            x = float(pair_match.group(1))
+            y = float(pair_match.group(2))
+            row.append((x, y))
+        
+        piecewise_linear_functions[pm_id] = row
+
+    return nb_points, piecewise_linear_functions
+
+def evaluate_piecewise_linear_function(piecewise_function, x_value):
+    """
+    Evaluate a piecewise linear function at a given x_value.
+    """
+    for i in range(len(piecewise_function) - 1):
+        x0, y0 = piecewise_function[i]
+        x1, y1 = piecewise_function[i + 1]
+        
+        if x0 <= x_value <= x1:
+            return y0 + (y1 - y0) * (x_value - x0) / (x1 - x0)
+        
+    print()
+    raise ValueError(f"x_value {x_value} is out of bounds for the piecewise linear function.")
+
+def create_log_folder():
+    current_datetime = datetime.datetime.now()
+    date_time_string = current_datetime.strftime("%Y-%m-%d_%H:%M:%S")
+    log_folder_name = f"log_{date_time_string}"
+    log_folder_path = os.path.join(LOGS_FOLDER_PATH, log_folder_name)
+    os.makedirs(log_folder_path, exist_ok=True)
+    return log_folder_path
 
 def clean_up_model_input_files():
     try:
