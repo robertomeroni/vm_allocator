@@ -1,8 +1,8 @@
 import os
 
 # General
-USE_RANDOM_SEED = False
-SAVE_LOGS = True
+USE_RANDOM_SEED = True
+SAVE_LOGS = False
 
 # Paths
 BASE_PATH = ''
@@ -23,7 +23,7 @@ MINI_MODEL_INPUT_FOLDER_PATH = os.path.join(BASE_PATH, 'simulation/model_input')
 MINI_MODEL_OUTPUT_FOLDER_PATH = os.path.join(BASE_PATH, 'simulation/model_output')
 
 # Simulation parameters
-TIME_STEP = 30       # Time step in seconds
-NEW_VMS_PER_STEP = 2  # Number of new VMs to generate at each time step
-NUM_TIME_STEPS = 20   # Number of time steps to simulate
+TIME_STEP = 30  # Time step in seconds
+NEW_VMS_PER_STEP = 3  # Expected number of new VMs to generate at each time step
+NUM_TIME_STEPS = 30 # Number of time steps to simulate
 

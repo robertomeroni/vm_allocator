@@ -1,7 +1,7 @@
 # Configuration for Physical Machines
 pm_config = {
-    'cpu_capacity': [4, 8, 16, 32],         # Available CPU capacities in cores
-    'memory_capacity': [16, 32, 64, 128],   # Available memory capacities in GB
+    'cpu_capacity': [4, 8, 16, 32, 64, 128, 256],         # Available CPU capacities in cores
+    'memory_capacity': [16, 32, 64, 128, 256, 512],   # Available memory capacities in GB
     'speed_range': (0.2, 5.0),              # Speed range for the machines 
     'time_to_turn_on_range': (30.0, 180.0), # Time to turn on range in seconds
     'time_to_turn_off_range': (15.0, 90.0), # Time to turn off range in seconds
@@ -31,6 +31,9 @@ default_values = {
 
 # Data Folder Path
 data_folder_path = 'model/data'
+
+
+
 
 # Convenience Aliases for Easy Access
 pm_cpu_capacity = pm_config['cpu_capacity']

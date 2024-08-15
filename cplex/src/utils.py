@@ -1,3 +1,5 @@
+import math
+import numpy as np
 import os
 import re
 import json
@@ -7,7 +9,6 @@ from weights import main_time_step, time_window, price, migration, network_bandw
 
 def load_virtual_machines(file_path):
     if not os.path.exists(file_path):
-        print(f"File {file_path} not found. Initializing an empty set of virtual machines.")
         return []
     with open(file_path, 'r') as file:
         data = file.read()
@@ -50,7 +51,7 @@ def load_virtual_machines(file_path):
 
 def load_physical_machines(file_path):
     if not os.path.exists(file_path):
-        print(f"File {file_path} not found. Initializing an empty set of physical machines and latency matrix.")
+        print(f"File {file_path} not found. Please provide an initial Physical Machines file.")
         return [], []
 
     with open(file_path, 'r') as file:
@@ -126,13 +127,30 @@ w_load_cpu = {w_load_cpu};
     with open(weights_file_path, 'w') as file:
         file.write(weights_data)
 
+def convert_to_serializable(obj):
+    """Recursively convert numpy types to native Python types."""
+    if isinstance(obj, np.int64) or isinstance(obj, np.int32):
+        return int(obj)
+    elif isinstance(obj, np.float64) or isinstance(obj, np.float32):
+        return float(obj)
+    elif isinstance(obj, dict):
+        return {key: convert_to_serializable(value) for key, value in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_to_serializable(item) for item in obj]
+    return obj
+
 def save_vm_sets(active_vms, terminated_vms, step, output_folder_path):
     active_file_path = os.path.join(output_folder_path, f'active_vms_t{step}.json')
     terminated_file_path = os.path.join(output_folder_path, f'terminated_vms_t{step}.json')
+    
+    # Convert data to serializable format before saving
+    active_vms_serializable = convert_to_serializable(active_vms)
+    terminated_vms_serializable = convert_to_serializable(terminated_vms)
+    
     with open(active_file_path, 'w') as file:
-        json.dump(active_vms, file, indent=4)
+        json.dump(active_vms_serializable, file, indent=4)
     with open(terminated_file_path, 'w') as file:
-        json.dump(terminated_vms, file, indent=4)
+        json.dump(terminated_vms_serializable, file, indent=4)
 
 def save_latency_matrix(latency_matrix, model_input_folder_path):
     latency_file_path = os.path.join(model_input_folder_path, 'latency.dat')
@@ -286,6 +304,9 @@ def create_log_folder():
     log_folder_path = os.path.join(LOGS_FOLDER_PATH, log_folder_name)
     os.makedirs(log_folder_path, exist_ok=True)
     return log_folder_path
+
+def round_down(value):
+    return math.floor(value * 10000) / 10000
 
 def clean_up_model_input_files():
     try:

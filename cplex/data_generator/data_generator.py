@@ -175,17 +175,36 @@ def generate_unique_filename(base_path, base_name, extension):
         if not os.path.exists(file_path):
             return file_path
         version += 1
+import random
+import os
+import sys
+from config import (
+    pm_config, vm_config, network_config, default_values, data_folder_path,
+    pm_cpu_capacity, pm_memory_capacity, pm_speed_range, pm_time_to_turn_on_range, pm_time_to_turn_off_range,
+    vm_requested_cpu, vm_requested_memory, execution_time_range, allocation_time_range,
+    default_num_physical_machines, default_num_virtual_machines, state_percentage, running_percentage, latency_range,
+    network_bandwidth
+)
+
+# Your existing functions (calculate_power_consumption, generate_latency_matrix, etc.) remain unchanged
 
 def get_terminal_input(prompt, default):
     user_input = input(f"{prompt} [{default}]: ")
     return int(user_input) if user_input else default
 
+# Parse command-line arguments
 if len(sys.argv) > 1 and sys.argv[1] == '--terminal':
     num_physical_machines = get_terminal_input("Number of physical machines", default_num_physical_machines)
     num_virtual_machines = get_terminal_input("Number of virtual machines", default_num_virtual_machines)
+    output_folder = data_folder_path
+elif len(sys.argv) > 1 and sys.argv[1] == '--simulation':
+    num_physical_machines = int(sys.argv[2]) if len(sys.argv) > 2 else default_num_physical_machines
+    num_virtual_machines = 0
+    output_folder = os.path.dirname(sys.argv[3])  # Use the directory of the provided file path
 else:
     num_physical_machines = default_num_physical_machines
     num_virtual_machines = default_num_virtual_machines
+    output_folder = data_folder_path
 
 latency_matrix = generate_latency_matrix(num_physical_machines, latency_range)
 physical_machines = generate_physical_machines(num_physical_machines, pm_cpu_capacity, pm_memory_capacity, pm_speed_range, pm_time_to_turn_on_range, pm_time_to_turn_off_range, state_percentage)
@@ -194,16 +213,20 @@ virtual_machines = generate_virtual_machines(num_virtual_machines, num_physical_
 # Update physical machine loads based on the virtual machines
 physical_machines = update_physical_machine_loads(physical_machines, virtual_machines)
 
+# Ensure the output folder exists
+output_folder = os.path.expanduser(output_folder)
+os.makedirs(output_folder, exist_ok=True)
+
 if physical_machines:
     formatted_physical_machines = format_physical_machines(physical_machines)
     formatted_latency_matrix = format_latency_matrix(latency_matrix)
     formatted_power_function = format_power_function(physical_machines)
     
-    base_path = os.path.expanduser(data_folder_path)
-    os.makedirs(base_path, exist_ok=True)
-    
-    pm_base_name = f"physical_machines_{num_physical_machines}"
-    pm_file_path = generate_unique_filename(base_path, pm_base_name, 'dat')
+    if len(sys.argv) > 1 and sys.argv[1] == '--simulation':
+        pm_file_path = os.path.join(output_folder, 'physical_machines.dat')
+    else:
+        pm_base_name = f"physical_machines_{num_physical_machines}"
+        pm_file_path = generate_unique_filename(output_folder, pm_base_name, 'dat')
     
     with open(pm_file_path, 'w') as pm_file:
         pm_file.write(formatted_physical_machines)
@@ -216,11 +239,9 @@ if physical_machines:
 
 if virtual_machines:
     formatted_virtual_machines = format_virtual_machines(virtual_machines)
-    base_path = os.path.expanduser(data_folder_path)
-    os.makedirs(base_path, exist_ok=True)
     
     vm_base_name = f"virtual_machines_{num_virtual_machines}"
-    vm_file_path = generate_unique_filename(base_path, vm_base_name, 'dat')
+    vm_file_path = generate_unique_filename(output_folder, vm_base_name, 'dat')
     
     with open(vm_file_path, 'w') as vm_file:
         vm_file.write(formatted_virtual_machines)

@@ -110,6 +110,8 @@ int was_migrating_from[vm in virtual_machines][pm in physical_machines] =
 int is_same_group[v1 in virtual_machines][v2 in virtual_machines] = 
   (v1.group == v2.group ? 1 : 0); 
 
+int M = card(virtual_machines);
+
 // Energy consumption in 1 second time period of each Physical Machine, depending by the load
 float slopeBeforePoint[pm in physical_machines][p in 1..nb_points]=
   (p == 1) ? 0 : (power_function[pm][p].y - power_function[pm][p-1].y)/(power_function[pm][p].x-power_function[pm][p-1].x);
@@ -132,8 +134,8 @@ dvar boolean is_first_migration[virtual_machines];
 // Expressions
 dexpr float cpu_load[pm in physical_machines] = (1 / pm.capacity.cpu) * sum(vm in virtual_machines) vm.requested.cpu * new_allocation[vm][pm];
 dexpr float memory_load[pm in physical_machines] = (1 / pm.capacity.memory) * sum(vm in virtual_machines) vm.requested.memory * new_allocation[vm][pm]; 
-dexpr float cpu_load_migration[pm in physical_machines] = (1 / pm.capacity.cpu) * sum(vm in virtual_machines) vm.requested.cpu * (new_allocation[vm][pm] + is_migrating_from[vm][pm] - is_allocating_on[vm][pm]);
-dexpr float memory_load_migration[pm in physical_machines] = (1 / pm.capacity.memory) * sum(vm in virtual_machines) vm.requested.memory * (new_allocation[vm][pm] + is_migrating_from[vm][pm] - is_allocating_on[vm][pm]); 
+dexpr float cpu_load_migration[pm in physical_machines] = (1 / pm.capacity.cpu) * sum(vm in virtual_machines) vm.requested.cpu * (new_allocation[vm][pm] + is_migrating_from[vm][pm] - is_allocating_on[vm][pm] * (1 - was_allocating[vm])); // When there is a migration, allow pre-allocation of VMs
+dexpr float memory_load_migration[pm in physical_machines] = (1 / pm.capacity.memory) * sum(vm in virtual_machines) vm.requested.memory * (new_allocation[vm][pm] + is_migrating_from[vm][pm] - is_allocating_on[vm][pm] * (1 - was_allocating[vm])); 
 dexpr int turn_on[pm in physical_machines] = (1 - pm.s.state) * is_on[pm];  
 dexpr int turn_off[pm in physical_machines] = pm.s.state * (1 - is_on[pm]); 
 dexpr int is_added[vm in virtual_machines] = (1 - sum(pm in physical_machines) old_allocation[vm][pm]) * sum(pm in physical_machines) new_allocation[vm][pm];
@@ -398,7 +400,7 @@ subject to {
   }  
   // If a VM is migrating from a PM, the PM has to be on
   forall (pm in physical_machines) {
-    is_on[pm] >= sum(vm in virtual_machines) is_migrating_from[vm][pm];
+    M * is_on[pm] >= sum(vm in virtual_machines) is_migrating_from[vm][pm];
   }
   // Uniqueness of Virtual Machine state
   forall (vm in virtual_machines) {

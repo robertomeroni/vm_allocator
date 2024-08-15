@@ -1,5 +1,5 @@
 import os
-import random
+import numpy as np
 from copy import deepcopy
 from config import BASE_PATH, INITIAL_VMS_FILE, INITIAL_PMS_FILE, POWER_FUNCTION_FILE, OUTPUT_FOLDER_PATH, MODEL_INPUT_FOLDER_PATH, MODEL_OUTPUT_FOLDER_PATH, MAIN_MODEL_PATH, MINI_MODEL_INPUT_FOLDER_PATH, TIME_STEP, NEW_VMS_PER_STEP, NUM_TIME_STEPS, USE_RANDOM_SEED
 from logs import log_initial_physical_machines, log_allocation, log_final_net_profit
@@ -11,7 +11,7 @@ from colorama import Fore, Style
 from weights import w_load_cpu, energy, pue, migration
 
 if USE_RANDOM_SEED:
-    random.seed(42)
+    np.random.seed(42)
 
 # Ensure the directories exist
 os.makedirs(OUTPUT_FOLDER_PATH, exist_ok=True)
@@ -86,8 +86,8 @@ def execute_time_step(active_vms, terminated_vms, scheduled_vms, physical_machin
                     scheduled_vm['run']['current_time'] += extra_time * pm_speed
 
 def calculate_total_costs(active_vms, physical_machines, cpu_load, memory_load):
+    migration_energy_consumption = [0.0] * len(active_vms)
     load_energy_consumption = [0.0] * len(physical_machines)
-    migration_energy_consumption = [0.0] * max(vm['id'] for vm in active_vms)
 
     cpu_power = 0.0
     memory_power = 0.0
@@ -107,29 +107,28 @@ def calculate_total_costs(active_vms, physical_machines, cpu_load, memory_load):
             cpu_power = w_load_cpu * evaluate_piecewise_linear_function(power_function[pm['id']], cpu_load[pm['id']])  
             memory_power = (1 - w_load_cpu) * evaluate_piecewise_linear_function(power_function[pm['id']], memory_load[pm['id']])
         
-        # Power consumption if machine is turning on
         elif pm['s']['state'] == 1 and pm['s']['time_to_turn_on'] > 0:
             turning_on_power = evaluate_piecewise_linear_function(power_function[pm['id']], 0) 
             turning_on_energy = turning_on_power * min(TIME_STEP, pm['s']['time_to_turn_on'])
 
-        # Power consumption if machine is turning off
         elif pm['s']['state'] == 0 and pm['s']['time_to_turn_off'] > 0:
             turning_off_power = evaluate_piecewise_linear_function(power_function[pm['id']], 0) 
             turning_off_energy = turning_off_power * min(TIME_STEP, pm['s']['time_to_turn_off'])
 
         load_energy_consumption[pm['id']] = (cpu_power + memory_power) * TIME_STEP + turning_on_energy + turning_off_energy
     
-    for vm in active_vms:
+    for i, vm in enumerate(active_vms):
         if vm['migration']['from_pm'] != -1 and vm['migration']['to_pm'] != -1:
             migration_total_energy = migration['energy']['offset'] + migration['energy']['coefficient'] * vm['requested']['memory']
             migration_energy_per_second = migration_total_energy / vm['migration']['total_time']
             remaining_migration_time = vm['migration']['total_time'] - vm['migration']['current_time']
-            migration_energy_consumption[vm['id']] = migration_energy_per_second * min(TIME_STEP, remaining_migration_time)
+            migration_energy_consumption[i] = migration_energy_per_second * min(TIME_STEP, remaining_migration_time)
 
     total_energy_consumption = sum(load_energy_consumption) + sum(migration_energy_consumption)
     costs = total_energy_consumption * energy['cost'] * pue
     
     return costs
+
 
 def calculate_total_profit(terminated_vms):
     total_profit = sum(vm['profit'] for vm in terminated_vms)
@@ -162,7 +161,7 @@ def simulate_time_steps(initial_vms, initial_pms, num_steps, new_vms_per_step, l
 
         # Generate new VMs
         generate_new_vms(active_vms, new_vms_per_step, existing_ids)
-        
+    
         if step % 4 == 0:
             model_to_run = 'main'
         elif step % 2 == 0:
@@ -180,7 +179,7 @@ def simulate_time_steps(initial_vms, initial_pms, num_steps, new_vms_per_step, l
 
             # Parse OPL output and reallocate VMs
             parsed_data = parse_opl_output(opl_output)
-            new_allocation = parsed_data['new_allocation']
+            new_allocation = parsed_data['new_allocation'] if 'new_allocation' in parsed_data else None
             vm_ids = parsed_data['vm_ids']
             pm_ids = parsed_data['pm_ids']
             is_allocation = parsed_data['is_allocation']
@@ -210,7 +209,7 @@ def simulate_time_steps(initial_vms, initial_pms, num_steps, new_vms_per_step, l
 
             # Parse OPL output and reallocate VMs
             parsed_data = parse_mini_opl_output(opl_output)
-            partial_allocation = parsed_data['allocation']
+            partial_allocation = parsed_data['allocation'] if 'allocation' in parsed_data else None
             vm_ids = parsed_data['vm_ids']
             pm_ids = parsed_data['pm_ids']
 

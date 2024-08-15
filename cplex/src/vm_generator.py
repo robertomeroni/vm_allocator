@@ -1,12 +1,14 @@
-import random
+import numpy as np
 from weights import price, migration
 
 def generate_new_vms(active_vms, new_vms_per_step, existing_ids):
-    for _ in range(new_vms_per_step):
+    num_new_vms = np.random.poisson(lam=new_vms_per_step)
+
+    for _ in range(num_new_vms):
         new_vm_id = generate_unique_id(existing_ids)
-        requested_cpu = random.choice([1, 2, 4, 8, 16])
-        requested_memory = random.choice([4, 8, 16, 32, 64])
-        run_total_time = random.uniform(30.0, 600.0)
+        requested_cpu = np.random.choice([1, 2, 4, 8, 16])
+        requested_memory = np.random.choice([4, 8, 16, 32, 64])
+        run_total_time = np.random.uniform(30.0, 600.0)
 
         profit = (requested_cpu * price['cpu'] + requested_memory * price['memory']) * run_total_time
 
@@ -20,7 +22,7 @@ def generate_new_vms(active_vms, new_vms_per_step, existing_ids):
             },
             'allocation': {
                 'current_time': 0.0,
-                'total_time': round(random.uniform(1.0, 10.0), 0),
+                'total_time': round(np.random.uniform(1.0, 10.0), 0),
                 'pm': -1  # New VM is not running on any physical machine initially
             },
             'run': {
@@ -34,7 +36,7 @@ def generate_new_vms(active_vms, new_vms_per_step, existing_ids):
                 'from_pm': -1,
                 'to_pm': -1
             },
-            'group': random.randint(1, 10),  
+            'group': np.random.randint(1, 10),  
             'profit': round(profit, 5)  # Calculated profit based on requested resources
         }
         active_vms.append(new_vm)
