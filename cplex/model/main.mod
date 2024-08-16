@@ -1,7 +1,7 @@
 main {
   // Define folder paths
-  var folderPath = "/home/roberto/job/vm_allocator/cplex/model/";
-  var inputFolderPath = "/home/roberto/job/vm_allocator/cplex/simulation/model_input/";
+  var folderPath = "model/";
+  var inputFolderPath = "simulation/model_input/";
 
   // Define file names
   var modelFile = "vm_allocation.mod";
