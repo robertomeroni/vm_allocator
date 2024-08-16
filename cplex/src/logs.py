@@ -1,20 +1,28 @@
 import os
+import datetime
 from colorama import Fore, Style, init
-from config import SAVE_LOGS
+from config import SAVE_LOGS, LOGS_FOLDER_PATH
 
 init(autoreset=True, strip=False)
 
-def log_initial_physical_machines(pm_list, base_path, log_folder_path):
-    log_file_path = os.path.join(log_folder_path, 'initial_physical_machines.log')
+def create_log_folder():
+    current_datetime = datetime.datetime.now()
+    date_time_string = current_datetime.strftime("%Y-%m-%d_%H:%M:%S")
+    log_folder_name = f"log_{date_time_string}"
+    log_folder_path = os.path.join(LOGS_FOLDER_PATH, log_folder_name)
+    os.makedirs(log_folder_path, exist_ok=True)
+    return log_folder_path
 
+def log_initial_physical_machines(pm_list):
+    log_folder_path = create_log_folder()
+    log_file_path = os.path.join(log_folder_path, 'initial_physical_machines.log')
     with open(log_file_path, 'w') as log_file:
         log_file.write("Initial Physical Machines:\n")
         for pm in pm_list:
             log_file.write(f"  PM ID: {pm['id']}, CPU Capacity: {pm['capacity']['cpu']}, Memory Capacity: {pm['capacity']['memory']}, Speed: {pm['features']['speed']}, Time to Turn On: {pm['s']['time_to_turn_on']}, Time to Turn Off: {pm['s']['time_to_turn_off']}, State: {pm['s']['state']}\n")
+    return log_folder_path
 
-def log_allocation(step, active_vms, old_active_vms, terminated_vms, removed_vms, turned_on_pms, turned_off_pms, pm_list, cpu_load, memory_load, total_profit, total_costs, log_folder_path):
-    log_file_path = os.path.join(log_folder_path, f'step_{step}.log')
-
+def log_allocation(step, active_vms, old_active_vms, terminated_vms, removed_vms, turned_on_pms, turned_off_pms, pm_list, cpu_load, memory_load, total_profit, total_costs, log_folder_path = None):
     log_lines = []
     console_lines = []
 
@@ -83,7 +91,13 @@ def log_allocation(step, active_vms, old_active_vms, terminated_vms, removed_vms
     if allocating_vms:
         log_line([("Allocating Virtual Machines:", Fore.LIGHTCYAN_EX, True)])
         for vm in allocating_vms:
-            state_change = " (State Changed)" if vm['id'] not in previous_state or previous_state[vm['id']] != 'allocating' else ''
+            state_change = ""
+            if (vm['id'] not in previous_state or 
+                previous_state[vm['id']] != 'allocating' or 
+                vm['id'] not in old_active_vms or 
+                old_active_vms[vm['id']]['allocation']['pm'] != vm['allocation']['pm']):
+                state_change = " (State Changed)"
+
             log_line([
                 ("  VM ID: ", Fore.YELLOW if state_change else None, True), (f"{vm['id']}", Fore.YELLOW if state_change else None, False),
                 (", Allocating on PM: ", Fore.YELLOW if state_change else None, True), (f"{vm['allocation']['pm']}", Fore.YELLOW if state_change else None, False),
@@ -102,7 +116,7 @@ def log_allocation(step, active_vms, old_active_vms, terminated_vms, removed_vms
             log_line([
                 ("  VM ID: ", Fore.YELLOW if state_change else None, True), (f"{vm['id']}", Fore.YELLOW if state_change else None, False),
                 (", Running on PM: ", Fore.YELLOW if state_change else None, True), (f"{vm['run']['pm']}", Fore.YELLOW if state_change else None, False),
-                (", Execution Time: ", Fore.YELLOW if state_change else None, True), (f"{round(vm['run']['current_time'], 5)}/{vm['run']['total_time']}", Fore.YELLOW if state_change else None, False),
+                (", Execution Time: ", Fore.YELLOW if state_change else None, True), (f"{round(vm['run']['current_time'], 1)}/{vm['run']['total_time']}", Fore.YELLOW if state_change else None, False),
                 (", CPU: ", Fore.YELLOW if state_change else None, True), (f"{vm['requested']['cpu']}", Fore.YELLOW if state_change else None, False),
                 (", Memory: ", Fore.YELLOW if state_change else None, True), (f"{vm['requested']['memory']}", Fore.YELLOW if state_change else None, False),
                 (", Profit: $", Fore.YELLOW if state_change else None, True), (f"{vm['profit']:.6f}", Fore.YELLOW if state_change else None, False),
@@ -187,6 +201,7 @@ def log_allocation(step, active_vms, old_active_vms, terminated_vms, removed_vms
 
     # Save log to file (without colors and bold formatting)
     if SAVE_LOGS:
+        log_file_path = os.path.join(log_folder_path, f'step_{step}.log')
         with open(log_file_path, 'w') as log_file:
             log_file.write('\n'.join(log_lines))
 
@@ -208,8 +223,9 @@ def log_final_net_profit(total_profit, total_costs, log_folder_path):
     print(f"\n{color}{Style.BRIGHT}\033[4m{message}{Style.RESET_ALL}\n")
 
     # Save to log file (without colors)
-    log_file_path = os.path.join(log_folder_path, 'final_net_profit.log')
-    with open(log_file_path, 'a') as log_file:
-        log_file.write(message + '\n')
+    if SAVE_LOGS:
+        log_file_path = os.path.join(log_folder_path, 'final_net_profit.log')
+        with open(log_file_path, 'a') as log_file:
+            log_file.write(message + '\n')
 
     

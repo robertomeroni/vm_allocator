@@ -1,12 +1,10 @@
-import random
+import numpy as np
 import os
 import sys
 from config import (
-    pm_config, vm_config, network_config, default_values, data_folder_path,
-    pm_cpu_capacity, pm_memory_capacity, pm_speed_range, pm_time_to_turn_on_range, pm_time_to_turn_off_range,
-    vm_requested_cpu, vm_requested_memory, execution_time_range, allocation_time_range,
-    default_num_physical_machines, default_num_virtual_machines, state_percentage, running_percentage, latency_range,
-    network_bandwidth
+    data_folder_path, pm_cpu_capacity, pm_memory_capacity, pm_speed_range, pm_time_to_turn_on_range, pm_time_to_turn_off_range,
+    vm_requested_cpu, vm_requested_memory, execution_time_range, allocation_time_range, default_num_physical_machines, 
+    default_num_virtual_machines, state_percentage, running_percentage, latency_range, network_bandwidth
 )
 
 def calculate_power_consumption(cpu_cores, memory_gb):
@@ -39,20 +37,9 @@ def generate_latency_matrix(n, latency_range):
             if i == j:
                 latencies.append(0.0)
             else:
-                latencies.append(round(random.uniform(latency_range[0], latency_range[1]), 2))
+                latencies.append(round(np.random.uniform(latency_range[0], latency_range[1]), 2))
         latency_matrix.append(latencies)
     return latency_matrix
-
-def generate_speed(speed_range):
-    # Generate a random speed such that the "average" speed is 1 in the speed sense.
-    # Using inverse sampling to ensure higher speeds are less common.
-    lower, upper = speed_range
-    while True:
-        speed = round(random.uniform(lower, upper), 1)
-        # Calculate a weight inversely proportional to the speed (this ensures average speed of 1)
-        probability = 1 / speed
-        if random.random() < probability:
-            return speed
 
 def generate_physical_machines(n, cpu_capacity, memory_capacity, speed_range, time_to_turn_on_range, time_to_turn_off_range, state_percentage):
     if n == 0:
@@ -60,18 +47,19 @@ def generate_physical_machines(n, cpu_capacity, memory_capacity, speed_range, ti
     physical_machines = []
     num_on = int(n * state_percentage / 100)
     state_list = [1] * num_on + [0] * (n - num_on)
-    random.shuffle(state_list)
+    np.random.shuffle(state_list)
     
     for i in range(n):
         id = i
-        cpu = random.choice(cpu_capacity)
-        memory = random.choice(memory_capacity)
+        cpu = np.random.choice(cpu_capacity)
+        memory = np.random.choice(memory_capacity)
         capacity = (cpu, memory)
-        speed = generate_speed(speed_range)
+        speed = np.random.beta(1, 5)
+        speed = speed * (speed_range[1] - speed_range[0]) + speed_range[0]
         features = (speed,)
         state = (
-            round(random.uniform(time_to_turn_on_range[0], time_to_turn_on_range[1]), 1), 
-            round(random.uniform(time_to_turn_off_range[0], time_to_turn_off_range[1]), 1), 
+            round(np.random.uniform(time_to_turn_on_range[0], time_to_turn_on_range[1]), 1), 
+            round(np.random.uniform(time_to_turn_off_range[0], time_to_turn_off_range[1]), 1), 
             (0.0, 0.0),  # Initialize loads to 0
             state_list[i]
         )
@@ -88,26 +76,26 @@ def generate_virtual_machines(n, pm_count, requested_cpu, requested_memory, exec
 
     for i in range(n):
         id = i
-        requested = (random.choice(requested_cpu), random.choice(requested_memory))
+        requested = (np.random.choice(requested_cpu), np.random.choice(requested_memory))
         
         if i < num_running:
             suitable_pms = [pm for pm in on_pms if pm[1][0] >= requested[0] and pm[1][1] >= requested[1]]
             if suitable_pms:
-                allocated_pm = random.choice(suitable_pms)[0]
-                total_execution_time = round(random.uniform(execution_time_range[0], execution_time_range[1]), 1)
-                current_execution_time = round(random.uniform(0, total_execution_time), 1)
+                allocated_pm = np.random.choice(suitable_pms)[0]
+                total_execution_time = round(np.random.uniform(execution_time_range[0], execution_time_range[1]), 1)
+                current_execution_time = round(np.random.uniform(0, total_execution_time), 1)
                 run = (current_execution_time, total_execution_time, allocated_pm)
             else:
-                run = (0.0, round(random.uniform(execution_time_range[0], execution_time_range[1]), 1), -1)
+                run = (0.0, round(np.random.uniform(execution_time_range[0], execution_time_range[1]), 1), -1)
         else:
-            total_execution_time = round(random.uniform(execution_time_range[0], execution_time_range[1]), 1)
+            total_execution_time = round(np.random.uniform(execution_time_range[0], execution_time_range[1]), 1)
             run = (0.0, total_execution_time, -1)
         
-        allocation_time = round(random.uniform(allocation_time_range[0], allocation_time_range[1]), 1)
+        allocation_time = round(np.random.uniform(allocation_time_range[0], allocation_time_range[1]), 1)
         allocation = (0.0, allocation_time, -1)
         migration_time = round(requested[1] / network_bandwidth, 1)  # Calculate migration time based on memory size and network bandwidth
         migration = (0.0, migration_time, -1, -1)
-        group = random.randint(1, 10)  # Assuming groups are numbered from 1 to 10
+        group = np.random.randint(1, 10)  # Assuming groups are numbered from 1 to 10
         virtual_machines.append((id, requested, allocation, run, migration, group))
     return virtual_machines
 
@@ -175,24 +163,11 @@ def generate_unique_filename(base_path, base_name, extension):
         if not os.path.exists(file_path):
             return file_path
         version += 1
-import random
-import os
-import sys
-from config import (
-    pm_config, vm_config, network_config, default_values, data_folder_path,
-    pm_cpu_capacity, pm_memory_capacity, pm_speed_range, pm_time_to_turn_on_range, pm_time_to_turn_off_range,
-    vm_requested_cpu, vm_requested_memory, execution_time_range, allocation_time_range,
-    default_num_physical_machines, default_num_virtual_machines, state_percentage, running_percentage, latency_range,
-    network_bandwidth
-)
-
-# Your existing functions (calculate_power_consumption, generate_latency_matrix, etc.) remain unchanged
 
 def get_terminal_input(prompt, default):
     user_input = input(f"{prompt} [{default}]: ")
     return int(user_input) if user_input else default
 
-# Parse command-line arguments
 if len(sys.argv) > 1 and sys.argv[1] == '--terminal':
     num_physical_machines = get_terminal_input("Number of physical machines", default_num_physical_machines)
     num_virtual_machines = get_terminal_input("Number of virtual machines", default_num_virtual_machines)
@@ -210,7 +185,6 @@ latency_matrix = generate_latency_matrix(num_physical_machines, latency_range)
 physical_machines = generate_physical_machines(num_physical_machines, pm_cpu_capacity, pm_memory_capacity, pm_speed_range, pm_time_to_turn_on_range, pm_time_to_turn_off_range, state_percentage)
 virtual_machines = generate_virtual_machines(num_virtual_machines, num_physical_machines, vm_requested_cpu, vm_requested_memory, execution_time_range, allocation_time_range, physical_machines, running_percentage)
 
-# Update physical machine loads based on the virtual machines
 physical_machines = update_physical_machine_loads(physical_machines, virtual_machines)
 
 # Ensure the output folder exists

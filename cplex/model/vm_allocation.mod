@@ -290,6 +290,7 @@ maximize   sum(pm in physical_machines) (
 		             - PUE * energy.cost * migration_energy[vm]   // energy cost of migration
 		           )
 		 	     - is_migrating_from[vm][pm] * profit[vm] * remaining_migration_time[vm] * pm.features.speed   // time costs of migration (resources in the "migrating from PM" are occupied, but profit for newly allocated VMs on this PM are already accounted)
+				 - is_migrating_on[vm][pm] * profit[vm] * minl(time_window, pm.s.time_to_turn_on)		       
 		       )		   
 		   );
 			   

@@ -1,10 +1,10 @@
 import os
 import numpy as np
 from copy import deepcopy
-from config import BASE_PATH, INITIAL_VMS_FILE, INITIAL_PMS_FILE, POWER_FUNCTION_FILE, OUTPUT_FOLDER_PATH, MODEL_INPUT_FOLDER_PATH, MODEL_OUTPUT_FOLDER_PATH, MAIN_MODEL_PATH, MINI_MODEL_INPUT_FOLDER_PATH, TIME_STEP, NEW_VMS_PER_STEP, NUM_TIME_STEPS, USE_RANDOM_SEED
+from config import INITIAL_VMS_FILE, INITIAL_PMS_FILE, POWER_FUNCTION_FILE, OUTPUT_FOLDER_PATH, MODEL_INPUT_FOLDER_PATH, MODEL_OUTPUT_FOLDER_PATH, MINI_MODEL_INPUT_FOLDER_PATH, TIME_STEP, NEW_VMS_PER_STEP, NUM_TIME_STEPS, USE_RANDOM_SEED, SAVE_LOGS, MAIN_MODEL_PERIOD, MINI_MODEL_PERIOD
 from logs import log_initial_physical_machines, log_allocation, log_final_net_profit
 from vm_generator import generate_new_vms
-from utils import load_virtual_machines, load_physical_machines, load_configuration, create_log_folder, save_latency_matrix, save_power_function, save_vm_sets, save_model_input_format, parse_opl_output, parse_power_function, evaluate_piecewise_linear_function, clean_up_model_input_files
+from utils import load_virtual_machines, load_physical_machines, load_configuration, save_latency_matrix, save_power_function, save_vm_sets, save_model_input_format, parse_opl_output, parse_power_function, evaluate_piecewise_linear_function, clean_up_model_input_files
 from allocation import run_opl_model, reallocate_vms, update_physical_machines_state, check_overload, update_physical_machines_load, calculate_load, deallocate_vms
 from mini import save_mini_model_input_format, run_mini_opl_model, parse_mini_opl_output, mini_reallocate_vms
 from colorama import Fore, Style
@@ -74,7 +74,6 @@ def execute_time_step(active_vms, terminated_vms, scheduled_vms, physical_machin
             pm_id, migration_extra_time = vms_extra_time[vm_id]
             for scheduled_vm in scheduled_vms[vm_id]:
                 scheduled_vm['allocation']['pm'] = pm_id
-                print(f"Allocating VM {scheduled_vm['id']} to PM {pm_id}")
                 remaining_time = scheduled_vm['allocation']['total_time'] - scheduled_vm['allocation']['current_time']
                 if migration_extra_time > remaining_time:
                     extra_time = round(migration_extra_time - remaining_time, 10)
@@ -162,9 +161,9 @@ def simulate_time_steps(initial_vms, initial_pms, num_steps, new_vms_per_step, l
         # Generate new VMs
         generate_new_vms(active_vms, new_vms_per_step, existing_ids)
     
-        if step % 4 == 0:
+        if step % MAIN_MODEL_PERIOD == 0:
             model_to_run = 'main'
-        elif step % 2 == 0:
+        elif step % MINI_MODEL_PERIOD + 1 == 0:
             model_to_run = 'mini'
         else:
             model_to_run = 'none'
@@ -252,8 +251,9 @@ def simulate_time_steps(initial_vms, initial_pms, num_steps, new_vms_per_step, l
 if __name__ == "__main__":
     initial_vms = load_virtual_machines(os.path.expanduser(INITIAL_VMS_FILE))
     initial_pms, latency_matrix = load_physical_machines(os.path.expanduser(INITIAL_PMS_FILE))
-    log_folder_path = create_log_folder()
-    log_initial_physical_machines(initial_pms, BASE_PATH, log_folder_path)
+    log_folder_path = None
+    if SAVE_LOGS:
+        log_folder_path = log_initial_physical_machines(initial_pms)
     load_configuration(MODEL_INPUT_FOLDER_PATH)
     save_latency_matrix(latency_matrix, MODEL_INPUT_FOLDER_PATH)
     save_power_function(os.path.expanduser(INITIAL_PMS_FILE), MODEL_INPUT_FOLDER_PATH)

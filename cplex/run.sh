@@ -4,7 +4,7 @@
 rm -rf ./simulation/model_input        \
        ./simulation/model_output       \
        ./simulation/simulation_output  \
-       ./simulation/overload
+       ./simulation/migration_schedule
 clear
 
 # Import the necessary variables from the Python config file

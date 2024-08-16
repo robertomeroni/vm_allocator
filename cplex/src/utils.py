@@ -93,6 +93,8 @@ def load_physical_machines(file_path):
     for line in latency_section:
         row = [float(value.strip()) for value in line.strip().replace('[', '').replace(']', '').split(',') if value.strip()]
         latency_matrix.append(row)
+    
+    normalize_speed(pms)
 
     return pms, latency_matrix
 
@@ -140,6 +142,7 @@ def convert_to_serializable(obj):
     return obj
 
 def save_vm_sets(active_vms, terminated_vms, step, output_folder_path):
+    check_migration_correctness(active_vms)
     active_file_path = os.path.join(output_folder_path, f'active_vms_t{step}.json')
     terminated_file_path = os.path.join(output_folder_path, f'terminated_vms_t{step}.json')
     
@@ -297,17 +300,30 @@ def evaluate_piecewise_linear_function(piecewise_function, x_value):
     print()
     raise ValueError(f"x_value {x_value} is out of bounds for the piecewise linear function.")
 
-def create_log_folder():
-    current_datetime = datetime.datetime.now()
-    date_time_string = current_datetime.strftime("%Y-%m-%d_%H:%M:%S")
-    log_folder_name = f"log_{date_time_string}"
-    log_folder_path = os.path.join(LOGS_FOLDER_PATH, log_folder_name)
-    os.makedirs(log_folder_path, exist_ok=True)
-    return log_folder_path
-
 def round_down(value):
     return math.floor(value * 10000) / 10000
 
+def normalize_speed(pms, target_mean=1):
+    speeds = [pm['features']['speed'] for pm in pms]
+    current_mean = sum(speeds) / len(speeds)
+    scaling_factor = target_mean / current_mean
+
+    # Normalize the speeds by multiplying each speed by the scaling factor
+    for pm in pms:
+        pm['features']['speed'] *= scaling_factor
+
+    return pms
+
+
+def check_migration_correctness(active_vms):
+    for vm in active_vms:
+        if vm['migration']['from_pm'] != -1 and vm['migration']['to_pm'] == -1 or vm['migration']['from_pm'] == -1 and vm['migration']['to_pm'] != -1:
+            print()
+            raise ValueError(f"VM {vm['id']} has an incorrect migration state: {vm['migration']}.")
+        elif vm['migration']['from_pm'] == vm['migration']['to_pm'] and vm['migration']['from_pm'] != -1:
+            print()
+            raise ValueError(f"VM {vm['id']} is migrating to the same PM {vm['migration']['to_pm']}.")
+        
 def clean_up_model_input_files():
     try:
         os.remove(os.path.join(MODEL_INPUT_FOLDER_PATH, 'virtual_machines.dat'))
