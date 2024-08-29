@@ -155,6 +155,15 @@ def save_vm_sets(active_vms, terminated_vms, step, output_folder_path):
     with open(terminated_file_path, 'w') as file:
         json.dump(terminated_vms_serializable, file, indent=4)
 
+def save_pm_sets(pms, step, output_folder_path):
+    file_path = os.path.join(output_folder_path, f'pms_t{step}.json')
+    
+    # Convert data to serializable format before saving
+    pms_serializable = convert_to_serializable(pms)
+    
+    with open(file_path, 'w') as file:
+        json.dump(pms_serializable, file, indent=4)
+
 def save_latency_matrix(latency_matrix, model_input_folder_path):
     latency_file_path = os.path.join(model_input_folder_path, 'latency.dat')
     with open(latency_file_path, 'w') as file:

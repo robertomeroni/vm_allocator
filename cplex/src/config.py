@@ -2,6 +2,7 @@ import os
 
 # General
 USE_RANDOM_SEED = True
+SEED_NUMBER = 42
 SAVE_LOGS = True
 
 # Paths
@@ -24,8 +25,8 @@ MINI_MODEL_OUTPUT_FOLDER_PATH = os.path.join(BASE_PATH, 'simulation/model_output
 
 # Simulation parameters
 TIME_STEP = 30  # Time step in seconds
-NEW_VMS_PER_STEP = 3  # Expected number of new VMs to generate at each time step
-NUM_TIME_STEPS = 30 # Number of time steps to simulate
+NEW_VMS_PER_STEP = 4  # Expected number of new VMs to generate at each time step
+NUM_TIME_STEPS = 100 # Number of time steps to simulate
 
 MAIN_MODEL_PERIOD = 4  # The main model will be run every MAIN_MODEL_PERIOD time steps
 MINI_MODEL_PERIOD = 2  # The mini model will be run every MINI_MODEL_PERIOD time steps (when the main model is not running)

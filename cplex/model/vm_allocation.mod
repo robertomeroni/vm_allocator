@@ -152,12 +152,11 @@ float w_load_cpu = ...;
 float migration_penalty = ...;
 
 PMWeights w_pm[pm in physical_machines] = 
-  <<pm.s.time_to_turn_on, 0>,        // turn_on: <time (s), power (W)>
+  <<pm.s.time_to_turn_on, 0>,                        // turn_on: <time (s), power (W)>
    <pm.s.time_to_turn_off, static_power[pm]>         // turn_off: <time (s), power (W)>
   >;
 
-// Profit from running a Virtual Machine
-float profit[vm in virtual_machines] = (vm.requested.cpu * price.cpu + vm.requested.memory * price.memory);
+float profit[vm in virtual_machines] = (vm.requested.cpu * price.cpu + vm.requested.memory * price.memory); // Profit per second from running a Virtual Machine
 float migration_energy[vm in virtual_machines] = migration_energy_parameters.offset + migration_energy_parameters.coefficient * vm.requested.memory;
 
 // Model
@@ -273,7 +272,7 @@ maximize   sum(pm in physical_machines) (
 		             w_pm[pm].turn_on.power * turn_on[pm] * minl(time_window, pm.s.time_to_turn_on)
 		           + w_pm[pm].turn_off.power * turn_off[pm] * minl(time_window, pm.s.time_to_turn_off)
 		           + static_power[pm] * is_on[pm] * time_window
-		           + dynamic_power[pm](w_load_cpu * cpu_load[pm] + (1 - w_load_cpu) * memory_load[pm]) * is_fully_turned_on[pm]
+		           + dynamic_power[pm](w_load_cpu * cpu_load[pm] + (1 - w_load_cpu) * memory_load[pm]) * is_fully_turned_on[pm] * time_window
                )
 		     + sum (vm in virtual_machines) ( 
 		     	 // allocation case
@@ -292,7 +291,11 @@ maximize   sum(pm in physical_machines) (
 		 	     - is_migrating_from[vm][pm] * profit[vm] * remaining_migration_time[vm] * pm.features.speed   // time costs of migration (resources in the "migrating from PM" are occupied, but profit for newly allocated VMs on this PM are already accounted)
 				 - is_migrating_on[vm][pm] * profit[vm] * minl(time_window, pm.s.time_to_turn_on)		       
 		       )		   
-		   );
+		   )
+		   // removal case
+		 - sum(vm in virtual_machines) 
+		       is_removal[vm] * profit[vm] * vm.run.current_time
+		   ;
 			   
 subject to {
   // If Virtual Machine is allocated, the Physical Machine has to be ON (or turning ON)

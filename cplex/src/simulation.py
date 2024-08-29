@@ -1,17 +1,18 @@
 import os
 import numpy as np
 from copy import deepcopy
-from config import INITIAL_VMS_FILE, INITIAL_PMS_FILE, POWER_FUNCTION_FILE, OUTPUT_FOLDER_PATH, MODEL_INPUT_FOLDER_PATH, MODEL_OUTPUT_FOLDER_PATH, MINI_MODEL_INPUT_FOLDER_PATH, TIME_STEP, NEW_VMS_PER_STEP, NUM_TIME_STEPS, USE_RANDOM_SEED, SAVE_LOGS, MAIN_MODEL_PERIOD, MINI_MODEL_PERIOD
+from config import INITIAL_VMS_FILE, INITIAL_PMS_FILE, POWER_FUNCTION_FILE, OUTPUT_FOLDER_PATH, MODEL_INPUT_FOLDER_PATH, MODEL_OUTPUT_FOLDER_PATH, MINI_MODEL_INPUT_FOLDER_PATH, TIME_STEP, NEW_VMS_PER_STEP, NUM_TIME_STEPS, USE_RANDOM_SEED, SEED_NUMBER, SAVE_LOGS, MAIN_MODEL_PERIOD, MINI_MODEL_PERIOD
 from logs import log_initial_physical_machines, log_allocation, log_final_net_profit
 from vm_generator import generate_new_vms
-from utils import load_virtual_machines, load_physical_machines, load_configuration, save_latency_matrix, save_power_function, save_vm_sets, save_model_input_format, parse_opl_output, parse_power_function, evaluate_piecewise_linear_function, clean_up_model_input_files
+from utils import load_virtual_machines, load_physical_machines, load_configuration, save_latency_matrix, save_power_function, save_vm_sets, save_pm_sets, save_model_input_format, parse_opl_output, parse_power_function, evaluate_piecewise_linear_function, clean_up_model_input_files
 from allocation import run_opl_model, reallocate_vms, update_physical_machines_state, check_overload, update_physical_machines_load, calculate_load, deallocate_vms
 from mini import save_mini_model_input_format, run_mini_opl_model, parse_mini_opl_output, mini_reallocate_vms
+from workload_predictor import calculate_future_load
 from colorama import Fore, Style
-from weights import w_load_cpu, energy, pue, migration
+from weights import time_window, w_load_cpu, energy, pue, migration
 
 if USE_RANDOM_SEED:
-    np.random.seed(42)
+    np.random.seed(SEED_NUMBER)
 
 # Ensure the directories exist
 os.makedirs(OUTPUT_FOLDER_PATH, exist_ok=True)
@@ -19,6 +20,7 @@ os.makedirs(MODEL_INPUT_FOLDER_PATH, exist_ok=True)
 os.makedirs(MODEL_OUTPUT_FOLDER_PATH, exist_ok=True)
 
 def execute_time_step(active_vms, terminated_vms, scheduled_vms, physical_machines):
+    pms_extra_time = {}
     vms_extra_time = {}
 
     # Update the turning on and turning off time for physical machines
@@ -26,6 +28,7 @@ def execute_time_step(active_vms, terminated_vms, scheduled_vms, physical_machin
         if pm['s']['state'] == 1 and pm['s']['time_to_turn_on'] > 0:
             pm['s']['time_to_turn_on'] = round(pm['s']['time_to_turn_on'] - TIME_STEP, 10)
             if pm['s']['time_to_turn_on'] < 0:
+                pms_extra_time[pm['id']] = round(abs(pm['s']['time_to_turn_on']), 10)
                 pm['s']['time_to_turn_on'] = 0.0
         if pm['s']['state'] == 0 and pm['s']['time_to_turn_off'] > 0:
             pm['s']['time_to_turn_off'] = round(pm['s']['time_to_turn_off'] - TIME_STEP, 10)
@@ -41,10 +44,13 @@ def execute_time_step(active_vms, terminated_vms, scheduled_vms, physical_machin
                 extra_time = 0.0
                 
                 if vm['allocation']['pm'] != -1:
-                    remaining_time = vm['allocation']['total_time'] - vm['allocation']['current_time']
-                    if TIME_STEP > remaining_time:
-                        extra_time = round(TIME_STEP - remaining_time, 10)
-                    vm['allocation']['current_time'] += TIME_STEP
+                    time_step = TIME_STEP
+                    remaining_allocation_time = vm['allocation']['total_time'] - vm['allocation']['current_time']
+                    if pm_id in pms_extra_time:
+                        time_step = pms_extra_time[pm_id]
+                    if time_step > remaining_allocation_time:
+                        extra_time = round(time_step - remaining_allocation_time, 10)
+                    vm['allocation']['current_time'] += time_step
                     if vm['allocation']['current_time'] >= vm['allocation']['total_time']:
                         vm['allocation']['current_time'] = vm['allocation']['total_time']
                         vm['allocation']['pm'] = -1
@@ -161,19 +167,22 @@ def simulate_time_steps(initial_vms, initial_pms, num_steps, new_vms_per_step, l
         # Generate new VMs
         generate_new_vms(active_vms, new_vms_per_step, existing_ids)
     
-        if step % MAIN_MODEL_PERIOD == 0:
+        if step % MAIN_MODEL_PERIOD == 0 or step == 1:
             model_to_run = 'main'
-        elif step % MINI_MODEL_PERIOD + 1 == 0:
+        elif (step + 1) % MINI_MODEL_PERIOD == 0:
             model_to_run = 'mini'
         else:
             model_to_run = 'none'
 
         if model_to_run == 'main':
+            # Deallocate VMs assigned to turning on physical machines, so that they can be reallocated by the models
+            deallocate_vms(active_vms)
+            
             # Convert into model input format
             vm_model_input_file_path, pm_model_input_file_path = save_model_input_format(active_vms, physical_machines, step, MODEL_INPUT_FOLDER_PATH)
             
             # Run CPLEX model
-            print(f"\n{Fore.YELLOW}{Style.BRIGHT}Running main model for time step {step}...{Style.RESET_ALL}\n")
+            print(f"\n{Fore.YELLOW}{Style.BRIGHT}Running main model for time step {step}...{Style.RESET_ALL}")
             opl_output = run_opl_model(vm_model_input_file_path, pm_model_input_file_path, step)
 
             # Parse OPL output and reallocate VMs
@@ -197,13 +206,16 @@ def simulate_time_steps(initial_vms, initial_pms, num_steps, new_vms_per_step, l
                 removed_vms = reallocate_vms(active_vms, new_allocation, vm_ids, pm_ids, is_allocation, is_migration, is_removal, vm_previous_pm)
         
         elif model_to_run == 'mini':
+            # Deallocate VMs assigned to turning on physical machines, so that they can be reallocated by the models
+            deallocate_vms(active_vms)
+            
             non_allocated_vms = [vm for vm in active_vms if (vm['allocation']['pm'] == -1 and vm['run']['pm'] == -1 and vm['migration']['from_pm'] == -1 and vm['migration']['to_pm'] == -1)]
 
             # Convert into model input format
             mini_vm_model_input_file_path, mini_pm_model_input_file_path = save_mini_model_input_format(non_allocated_vms, physical_machines, step, MINI_MODEL_INPUT_FOLDER_PATH)
             
             # Run CPLEX model
-            print(f"\n{Fore.YELLOW}{Style.BRIGHT}Running mini model for time step {step}...{Style.RESET_ALL}\n")
+            print(f"\n{Fore.YELLOW}{Style.BRIGHT}Running mini model for time step {step}...{Style.RESET_ALL}")
             opl_output = run_mini_opl_model(mini_vm_model_input_file_path, mini_pm_model_input_file_path, MODEL_OUTPUT_FOLDER_PATH, step)
 
             # Parse OPL output and reallocate VMs
@@ -215,7 +227,7 @@ def simulate_time_steps(initial_vms, initial_pms, num_steps, new_vms_per_step, l
             mini_reallocate_vms(vm_ids, pm_ids, partial_allocation, active_vms)
         
         if model_to_run == 'none':
-            print(f"\n{Fore.YELLOW}{Style.BRIGHT}No model to run for time step {step}...{Style.RESET_ALL}\n")
+            print(f"\n{Fore.YELLOW}{Style.BRIGHT}No model to run for time step {step}...{Style.RESET_ALL}")
             
             is_on = [pm['s']['state'] for pm in physical_machines]
         
@@ -226,6 +238,7 @@ def simulate_time_steps(initial_vms, initial_pms, num_steps, new_vms_per_step, l
         update_physical_machines_load(physical_machines, cpu_load, memory_load)
         
         save_vm_sets(active_vms, terminated_vms, step, OUTPUT_FOLDER_PATH)
+        save_pm_sets(physical_machines, step, OUTPUT_FOLDER_PATH)
 
         # Calculate costs and profit
         total_costs += calculate_total_costs(active_vms, physical_machines, cpu_load, memory_load)
@@ -235,11 +248,15 @@ def simulate_time_steps(initial_vms, initial_pms, num_steps, new_vms_per_step, l
         log_allocation(step, active_vms, old_active_vms, terminated_vms, removed_vms, turned_on_pms, turned_off_pms, physical_machines, cpu_load, memory_load, total_profit, total_costs, log_folder_path)
         old_active_vms = deepcopy(active_vms)
 
+        # Calculate future load
+        future_loads = calculate_future_load(physical_machines, active_vms, step, time_window, TIME_STEP)
+        # detail print future loads
+        print(f"\n{Fore.CYAN}{Style.BRIGHT}Future loads for time step {step}:{Style.RESET_ALL}")
+        for i, (cpu_load, memory_load) in enumerate(future_loads):
+            print(f"Time Step {i + 1}: CPU load = {cpu_load}, Memory load = {memory_load}")
+
         # Execute time step
         execute_time_step(active_vms, terminated_vms, scheduled_vms, physical_machines)
-        
-        # Deallocate VMs assigned to turning on physical machines, so that they can be reallocated by the models
-        deallocate_vms(active_vms)
         
         # Calculate and update load
         cpu_load, memory_load = calculate_load(physical_machines, active_vms)
