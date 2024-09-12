@@ -8,6 +8,7 @@ tuple Execution {
 tuple Migration {
   float current_time;
   float total_time;
+  float down_time;
   float from_pm;
   float to_pm;
 }
@@ -46,8 +47,38 @@ tuple VirtualMachine {
   Execution allocation;
   Execution run;
   Migration migration;
-  int group; // co-allocation of tasks belonging to the same group is preferred
 };
+
+tuple TimeAndPower {
+  float time;
+  float power;
+}
+
+tuple PMWeights {
+  TimeAndPower turn_on;
+  TimeAndPower turn_off;
+}
+
+tuple SourceTarget {
+  float source;
+  float target;
+}
+
+tuple MigrationEnergy {
+  SourceTarget cpu_overhead;
+  float concurrent;
+}
+
+tuple MigrationTime {
+  float memory_dirty_rate;
+  float network_bandwidth;
+  float resume_vm_on_target;
+}
+
+tuple MigrationWeights {
+  MigrationTime time;
+  MigrationEnergy energy;
+}
 
 tuple Energy {
   float cost;
@@ -59,11 +90,6 @@ tuple Point {
   float y;
 }
 
-tuple LinearFunction {
-  float offset;
-  float coefficient;
-}
-
 // Data
 {PhysicalMachine} physical_machines = ...;
 {VirtualMachine} virtual_machines= ...;
@@ -72,14 +98,13 @@ int nb_points = ...;
 Point power_function[pm in physical_machines][1..nb_points]= ...;
 
 float main_time_step = ...; // seconds
-float time_window = ...; // seconds
+float time_window = ...;
+
 ArchitectureFloat price = ...;
 Energy energy = ...;
 float PUE = ...;
-float network_bandwidth = ...;
+MigrationWeights migration = ...;
 float w_load_cpu = ...;
-LinearFunction migration_energy_parameters=...;
-float migration_penalty= ...;
 
 float remaining_allocation_time[vm in virtual_machines] = vm.allocation.total_time - vm.allocation.current_time;
 float remaining_run_time[vm in virtual_machines] = vm.run.total_time - vm.run.current_time;
@@ -105,7 +130,8 @@ float profit[vm in virtual_machines] = (vm.requested.cpu * price.cpu + vm.reques
 maximize   sum(pm in physical_machines) ( 
 	         - PUE * energy.cost * additional_energy[pm]
 		     + sum (vm in virtual_machines) ( 
-        		   allocation[vm][pm] * profit[vm] * vm.run.total_time / (remaining_allocation_time[vm] + remaining_run_time[vm]) / pm.features.speed) // allocation case
+        		   allocation[vm][pm] * profit[vm] * vm.run.total_time / ((remaining_allocation_time[vm] + remaining_run_time[vm]) / pm.features.speed) // allocation case
+		  	   )
 		   );
 	   
 subject to {
