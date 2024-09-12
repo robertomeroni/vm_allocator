@@ -10,6 +10,7 @@ main {
   var weightsFile = "weights.dat";
   var latencyFile = "latency.dat";
   var powerConsumptionFile ="power_consumption.dat"
+  var settingsFile="epgap_0.01.ops"
   
   // Create complete paths by concatenating folder paths and file names
   var modelPath = folderPath + modelFile;
@@ -37,6 +38,7 @@ main {
   model.addDataSource(power_consumption);
   
   model.generate();
+  model.applyOpsSettings(folderPath, settingsFile)
   
   if (cplex.solve()) {
     writeln("\nMAIN MODEL\n")
