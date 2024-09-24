@@ -93,7 +93,6 @@ tuple Point {
 // Data
 {PhysicalMachine} physical_machines = ...;
 {VirtualMachine} virtual_machines= ...;
-float latency[pm in physical_machines][pm in physical_machines] = ...;
 int nb_points = ...;
 Point power_function[pm in physical_machines][1..nb_points]= ...;
 
@@ -103,7 +102,9 @@ float time_window = ...;
 float remaining_allocation_time[vm in virtual_machines] = vm.allocation.total_time - vm.allocation.current_time;
 float remaining_run_time[vm in virtual_machines] = vm.run.total_time - vm.run.current_time;
 
-int is_fully_turned_on[pm in physical_machines] = // if is going to be fully turned ON in the next time step (unless it gets turned OFF)
+int is_fully_turned_on[pm in physical_machines] =
+  (pm.s.time_to_turn_on <= 0 ? 1 : 0); 
+int is_on[pm in physical_machines] = // if is going to be fully turned ON in the next time step (unless it gets turned OFF)
   (pm.s.time_to_turn_on <= main_time_step ? 1 : 0); 
 int old_allocation[vm in virtual_machines][pm in physical_machines] = 
   (vm.allocation.pm == pm.id || vm.run.pm == pm.id || vm.migration.to_pm == pm.id ? 1 : 0);
@@ -140,7 +141,6 @@ PMWeights w_pm[pm in physical_machines] =
 float profit[vm in virtual_machines] = (vm.requested.cpu * price.cpu + vm.requested.memory * price.memory); // Profit per second from running a Virtual Machine
 
 // Decision Variables
-dvar boolean is_on[physical_machines]; // if it is on in the new allocation (already on or will be turned on)
 dvar boolean new_allocation[virtual_machines][physical_machines];
 dvar boolean is_allocation[virtual_machines];
 dvar boolean is_allocating_on[virtual_machines][physical_machines];
@@ -153,45 +153,42 @@ dvar boolean is_migrating_from[virtual_machines][physical_machines];
 dvar boolean is_source[physical_machines];
 dvar boolean is_target[physical_machines];
 dvar boolean is_multiple_migrations[physical_machines];
+dvar boolean has_to_be_on[physical_machines];
 
 // Expressions
 dexpr float cpu_load[pm in physical_machines] = (1 / pm.capacity.cpu) * sum(vm in virtual_machines) vm.requested.cpu * new_allocation[vm][pm];
 dexpr float memory_load[pm in physical_machines] = (1 / pm.capacity.memory) * sum(vm in virtual_machines) vm.requested.memory * new_allocation[vm][pm]; 
 dexpr float cpu_load_migration[pm in physical_machines] = (1 / pm.capacity.cpu) * sum(vm in virtual_machines) vm.requested.cpu * (new_allocation[vm][pm] + is_migrating_from[vm][pm] - is_allocating_on[vm][pm] * (1 - was_allocating[vm])); // When there is a migration, allow pre-allocation of VMs
 dexpr float memory_load_migration[pm in physical_machines] = (1 / pm.capacity.memory) * sum(vm in virtual_machines) vm.requested.memory * (new_allocation[vm][pm] + is_migrating_from[vm][pm] - is_allocating_on[vm][pm] * (1 - was_allocating[vm])); 
-dexpr int turn_on[pm in physical_machines] = (1 - pm.s.state) * is_on[pm];  
-dexpr int turn_off[pm in physical_machines] = pm.s.state * (1 - is_on[pm]); 
 dexpr int is_added[vm in virtual_machines] = (1 - sum(pm in physical_machines) old_allocation[vm][pm]) * sum(pm in physical_machines) new_allocation[vm][pm];
 dexpr int is_removal[vm in virtual_machines] = sum(pm in physical_machines) old_allocation[vm][pm] * (1 - sum(pm in physical_machines) new_allocation[vm][pm]);
-//dexpr float latency_penalty[v1 in virtual_machines][p1 in physical_machines] = sum(v2 in virtual_machines, p2 in physical_machines) latency[p1][p2] * is_same_group[v1][v2] * (is_allocating_on[v2][p2] + is_running_on[v2][p2]);   // sum of the additional latencies when VM runs on PM
 
 // Model
 // Objective Function: net profit per second
 maximize   sum(pm in physical_machines) ( 
 	         - PUE * energy.cost * (
-		             w_pm[pm].turn_off.power * turn_off[pm] 
-		           + static_power[pm] * is_on[pm] 
-		           + dynamic_power[pm] (
+	         		 static_power[pm] * has_to_be_on[pm]
+	               + dynamic_power[pm] (
 		                 w_load_cpu * (cpu_load[pm] + migration.energy.cpu_overhead.source * is_source[pm] + migration.energy.cpu_overhead.target * is_target[pm] + migration.energy.concurrent * is_multiple_migrations[pm]) 
 		               + (1 - w_load_cpu) * memory_load[pm]
-		             ) * is_fully_turned_on[pm] 
+		             ) * is_on[pm] 
                )
 		     + sum (vm in virtual_machines) ( 
-		     	 // allocation case
-        		   is_allocating_on[vm][pm] * profit[vm] * vm.run.total_time                                                 // total profit
-        		 / (pm.s.time_to_turn_on + (remaining_allocation_time[vm] + remaining_run_time[vm]) / pm.features.speed)     // effective remaining time
-        		 // run case
-        		 + is_running_on[vm][pm] * profit[vm] * vm.run.total_time      // total profit
-        		 / (remaining_run_time[vm] / pm.features.speed)                // effective remaining time
-		         // migration case
-		         + is_migrating_on[vm][pm] * profit[vm] * vm.run.total_time	                                        // total profit
-		         / (pm.s.time_to_turn_on + remaining_run_time[vm] / pm.features.speed + vm.migration.down_time)     // effective remaining time
+		   	         // allocation case
+        		       is_allocating_on[vm][pm] * profit[vm] * vm.run.total_time                                                 // total profit
+        		     / (pm.s.time_to_turn_on + (remaining_allocation_time[vm] + remaining_run_time[vm]) / pm.features.speed)     // effective remaining time
+        		     // run case
+        		     + is_running_on[vm][pm] * profit[vm] * vm.run.total_time      // total profit
+        		     / (remaining_run_time[vm] / pm.features.speed)                // effective remaining time
+		             // migration case
+		             + is_migrating_on[vm][pm] * profit[vm] * vm.run.total_time	                                        // total profit
+		             / (pm.s.time_to_turn_on + remaining_run_time[vm] / pm.features.speed + vm.migration.down_time)     // effective remaining time
+		           )
 		       )
-		   )
-		   // removal case
-//		 - sum(vm in virtual_machines) 
-//		       is_removal[vm] * profit[vm] * vm.run.current_time
-		   ;
+		       // removal case
+		     - sum(vm in virtual_machines) 
+		       is_removal[vm] * profit[vm] * vm.run.current_time
+		       ;
 			   
 subject to {
   // If Virtual Machine is allocated, the Physical Machine has to be ON (or turning ON)
@@ -203,7 +200,12 @@ subject to {
   // A Virtual Machine is assigned maximum to one Physical Machine
   forall (vm in virtual_machines) {
     sum (pm in physical_machines) new_allocation[vm][pm] <= 1;
-  } 
+  }
+  // If Virtual Machines are allocated to a PM, the PM cannot be turned off 
+  forall(pm in physical_machines) {
+    has_to_be_on[pm] >= cpu_load[pm];
+    has_to_be_on[pm] >= memory_load[pm];
+  }
   // Physical Machine CPU and Memory capacity
   forall(pm in physical_machines) {
     cpu_load[pm] <= 1; 
@@ -298,13 +300,13 @@ subject to {
       is_first_migration[vm] * old_allocation[vm][pm] <= is_migrating_from[vm][pm];
     }
   }  
-  // If a VM is migrating from a PM, the PM has to be on
+  // If a VM is migrating from a PM, the PM has to be fully turned on
   forall (pm in physical_machines) {
-    M * is_on[pm] >= sum(vm in virtual_machines) is_migrating_from[vm][pm];
+    M * is_fully_turned_on[pm] >= sum(vm in virtual_machines) is_migrating_from[vm][pm];
   }
   // If a VM is migrating to a PM, the PM has to be fully on
   forall (pm in physical_machines) {
-    M * is_fully_turned_on[pm] >= sum(vm in virtual_machines) is_migrating_on[vm][pm];
+    M * is_on[pm] >= sum(vm in virtual_machines) is_migrating_on[vm][pm];
   }
   // If at least one migration is happening from a PM, PM is a source
   forall (pm in physical_machines) {
@@ -319,7 +321,7 @@ subject to {
   // If two or more migrations are happening from or on a PM, multiple migrations are happening at PM
   forall (pm in physical_machines) {
     2 * is_multiple_migrations[pm] <= sum(vm in virtual_machines) is_migrating_on[vm][pm] + sum(vm in virtual_machines) is_migrating_from[vm][pm];
-    1 + 2*M * is_multiple_migrations[pm] >= sum(vm in virtual_machines) is_migrating_on[vm][pm] + sum(vm in virtual_machines) is_migrating_from[vm][pm];
+    1 + 2 * M * is_multiple_migrations[pm] >= sum(vm in virtual_machines) is_migrating_on[vm][pm] + sum(vm in virtual_machines) is_migrating_from[vm][pm];
   }
   // Uniqueness of Virtual Machine state
   forall (vm in virtual_machines) {

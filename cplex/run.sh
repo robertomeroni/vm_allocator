@@ -3,6 +3,7 @@
 # Initialize variables
 NUM_PMS=0
 CONFIG_FILE="src/config.py"  # Default config file
+TRACE_FILE=""  # New variable for trace file
 
 # Parse the command-line arguments
 while [[ $# -gt 0 ]]; do
@@ -13,6 +14,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --config)
       CONFIG_FILE=$2
+      shift 2  # Shift past the flag and its argument
+      ;;
+    --trace)
+      TRACE_FILE=$2
       shift 2  # Shift past the flag and its argument
       ;;
     -*)
@@ -27,6 +32,11 @@ done
 
 # Print the config file in use
 echo "Running with config file: $CONFIG_FILE"
+
+# Print the trace file if provided
+if [ -n "$TRACE_FILE" ]; then
+  echo "Using trace file: $TRACE_FILE"
+fi
 
 # Set environment variable to disable color output
 export NO_COLOR=1
@@ -65,11 +75,11 @@ if [ $NUM_PMS -gt 0 ]; then
     echo "Launching data generator with $NUM_PMS physical machines..."
     python3 data_generator/data_generator.py --simulation $NUM_PMS "$INITIAL_PMS_FILE"
     echo "Launching simulation..."
-    python3 src/simulation.py --config "$CONFIG_FILE"
+    python3 src/simulation.py --config "$CONFIG_FILE" --trace "$TRACE_FILE"
 else 
     if [ -f "$INITIAL_PMS_FILE" ]; then
         echo "Initial PM file found: $INITIAL_PMS_FILE"
-        python3 src/simulation.py --config "$CONFIG_FILE"
+        python3 src/simulation.py --config "$CONFIG_FILE" --trace "$TRACE_FILE"
     else
         if [ -f "data_generator/data_generator.py" ]; then
             echo "Initial PM file not found at $INITIAL_PMS_FILE."
@@ -87,7 +97,7 @@ else
             # Launch the data generator with the user-provided input
             echo "Launching data generator with $num_pms physical machines..."
             python3 data_generator/data_generator.py --simulation $num_pms "$INITIAL_PMS_FILE"
-            python3 src/simulation.py --config "$CONFIG_FILE"
+            python3 src/simulation.py --config "$CONFIG_FILE" --trace "$TRACE_FILE"
         else
             echo "Error: Initial PM file and data generator script not found."
             exit 1

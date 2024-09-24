@@ -1,7 +1,7 @@
 import os
 import datetime
 from colorama import Fore, Style, init
-from config import SAVE_LOGS, LOGS_FOLDER_PATH
+from config import SAVE_LOGS, LOGS_FOLDER_PATH, PRINT_TO_CONSOLE
 
 init(autoreset=True, strip=False)
 
@@ -22,7 +22,7 @@ def log_initial_physical_machines(pm_list):
             log_file.write(f"  PM ID: {pm['id']}, CPU Capacity: {pm['capacity']['cpu']}, Memory Capacity: {pm['capacity']['memory']}, Speed: {pm['features']['speed']}, Time to Turn On: {pm['s']['time_to_turn_on']}, Time to Turn Off: {pm['s']['time_to_turn_off']}, State: {pm['s']['state']}\n")
     return log_folder_path
 
-def log_allocation(step, active_vms, old_active_vms, terminated_vms, removed_vms, turned_on_pms, turned_off_pms, pm_list, cpu_load, memory_load, total_profit, total_costs, log_folder_path = None):
+def log_allocation(step, active_vms, old_active_vms, terminated_vms, removed_vms, turned_on_pms, turned_off_pms, pm_list, cpu_load, memory_load, total_revenue, total_costs, log_folder_path = None):
     log_lines = []
     console_lines = []
 
@@ -83,7 +83,7 @@ def log_allocation(step, active_vms, old_active_vms, terminated_vms, removed_vms
                 ("  VM ID: ", Fore.YELLOW if state_change else None, True), (f"{vm['id']}", Fore.YELLOW if state_change else None, False),
                 (", CPU: ", Fore.YELLOW if state_change else None, True), (f"{vm['requested']['cpu']}", Fore.YELLOW if state_change else None, False),
                 (", Memory: ", Fore.YELLOW if state_change else None, True), (f"{vm['requested']['memory']}", Fore.YELLOW if state_change else None, False),
-                (", Profit: $", Fore.YELLOW if state_change else None, True), (f"{vm['profit']:.6f}", Fore.YELLOW if state_change else None, False),
+                (", revenue: $", Fore.YELLOW if state_change else None, True), (f"{vm['revenue']:.6f}", Fore.YELLOW if state_change else None, False),
                 (state_change, Fore.YELLOW if state_change else None, False)
             ])
 
@@ -104,7 +104,7 @@ def log_allocation(step, active_vms, old_active_vms, terminated_vms, removed_vms
                 (", Allocation Time: ", Fore.YELLOW if state_change else None, True), (f"{vm['allocation']['current_time']}/{vm['allocation']['total_time']}", Fore.YELLOW if state_change else None, False),
                 (", CPU: ", Fore.YELLOW if state_change else None, True), (f"{vm['requested']['cpu']}", Fore.YELLOW if state_change else None, False),
                 (", Memory: ", Fore.YELLOW if state_change else None, True), (f"{vm['requested']['memory']}", Fore.YELLOW if state_change else None, False),
-                (", Profit: $", Fore.YELLOW if state_change else None, True), (f"{vm['profit']:.6f}", Fore.YELLOW if state_change else None, False),
+                (", revenue: $", Fore.YELLOW if state_change else None, True), (f"{vm['revenue']:.6f}", Fore.YELLOW if state_change else None, False),
                 (state_change, Fore.YELLOW if state_change else None, False)
             ])
 
@@ -119,7 +119,7 @@ def log_allocation(step, active_vms, old_active_vms, terminated_vms, removed_vms
                 (", Execution Time: ", Fore.YELLOW if state_change else None, True), (f"{round(vm['run']['current_time'], 1)}/{vm['run']['total_time']}", Fore.YELLOW if state_change else None, False),
                 (", CPU: ", Fore.YELLOW if state_change else None, True), (f"{vm['requested']['cpu']}", Fore.YELLOW if state_change else None, False),
                 (", Memory: ", Fore.YELLOW if state_change else None, True), (f"{vm['requested']['memory']}", Fore.YELLOW if state_change else None, False),
-                (", Profit: $", Fore.YELLOW if state_change else None, True), (f"{vm['profit']:.6f}", Fore.YELLOW if state_change else None, False),
+                (", revenue: $", Fore.YELLOW if state_change else None, True), (f"{vm['revenue']:.6f}", Fore.YELLOW if state_change else None, False),
                 (state_change, Fore.YELLOW if state_change else None, False)
             ])
 
@@ -135,7 +135,7 @@ def log_allocation(step, active_vms, old_active_vms, terminated_vms, removed_vms
                 (", Migration Time: ", Fore.YELLOW if state_change else None, True), (f"{vm['migration']['current_time']}/{vm['migration']['total_time']}", Fore.YELLOW if state_change else None, False),
                 (", CPU: ", Fore.YELLOW if state_change else None, True), (f"{vm['requested']['cpu']}", Fore.YELLOW if state_change else None, False),
                 (", Memory: ", Fore.YELLOW if state_change else None, True), (f"{vm['requested']['memory']}", Fore.YELLOW if state_change else None, False),
-                (", Profit: $", Fore.YELLOW if state_change else None, True), (f"{vm['profit']:.6f}", Fore.YELLOW if state_change else None, False),
+                (", revenue: $", Fore.YELLOW if state_change else None, True), (f"{vm['revenue']:.6f}", Fore.YELLOW if state_change else None, False),
                 (state_change, Fore.YELLOW if state_change else None, False)
             ])
 
@@ -149,7 +149,7 @@ def log_allocation(step, active_vms, old_active_vms, terminated_vms, removed_vms
                 (", CPU: ", Fore.YELLOW if state_change else None, True), (f"{vm['requested']['cpu']}", Fore.YELLOW if state_change else None, False),
                 (", Memory: ", Fore.YELLOW if state_change else None, True), (f"{vm['requested']['memory']}", Fore.YELLOW if state_change else None, False),
                 (", Total Execution Time: ", Fore.YELLOW if state_change else None, True), (f"{vm['run']['total_time']}", Fore.YELLOW if state_change else None, False),
-                (", Profit: $", Fore.YELLOW if state_change else None, True), (f"{vm['profit']:.6f}", Fore.YELLOW if state_change else None, False),
+                (", revenue: $", Fore.YELLOW if state_change else None, True), (f"{vm['revenue']:.6f}", Fore.YELLOW if state_change else None, False),
                 (state_change, Fore.YELLOW if state_change else None, False)
             ])
 
@@ -161,7 +161,7 @@ def log_allocation(step, active_vms, old_active_vms, terminated_vms, removed_vms
                 ("  VM ID: ", Fore.YELLOW if state_change else None, True), (f"{vm['id']}", Fore.YELLOW if state_change else None, False),
                 (", CPU: ", Fore.YELLOW if state_change else None, True), (f"{vm['requested']['cpu']}", Fore.YELLOW if state_change else None, False),
                 (", Memory: ", Fore.YELLOW if state_change else None, True), (f"{vm['requested']['memory']}", Fore.YELLOW if state_change else None, False),
-                (", Profit: $", Fore.YELLOW if state_change else None, True), (f"{vm['profit']:.6f}", Fore.YELLOW if state_change else None, False)
+                (", revenue: $", Fore.YELLOW if state_change else None, True), (f"{vm['revenue']:.6f}", Fore.YELLOW if state_change else None, False)
             ])
 
     # Physical Machines header
@@ -189,10 +189,10 @@ def log_allocation(step, active_vms, old_active_vms, terminated_vms, removed_vms
             (state_change, Fore.YELLOW if state_change else None, False)
         ])
 
-    # Total Profit and Costs
+    # Total Revenue and Costs
     print()
     log_line([
-        ("\nTotal Profit Gained from Completed VMs: ", Fore.GREEN, True), (f"{total_profit:.6f}", Fore.GREEN, True), ("$", Fore.GREEN, True)
+        ("\nTotal Revenue Gained from Completed VMs: ", Fore.GREEN, True), (f"{total_revenue:.6f}", Fore.GREEN, True), ("$", Fore.GREEN, True)
     ])
     log_line([
         ("Total Costs Incurred: ", Fore.RED, True), (f"{total_costs:.6f}", Fore.RED, True), ("$", Fore.RED, True)
@@ -206,10 +206,11 @@ def log_allocation(step, active_vms, old_active_vms, terminated_vms, removed_vms
             log_file.write('\n'.join(log_lines))
 
     # Print to console (with colors and bold formatting)
-    print('\n'.join(console_lines))
+    if PRINT_TO_CONSOLE:
+        print('\n'.join(console_lines))
 
-def log_final_net_profit(total_profit, total_costs, log_folder_path):
-    net_profit = total_profit - total_costs
+def log_final_net_profit(total_revenue, total_costs, num_completed_migrations, num_removed_vms, max_percentage_of_pms_on, log_folder_path, MASTER_MODEL, USE_RANDOM_SEED, SEED_NUMBER, TIME_STEP, final_step, REAL_DATA, WORKLOAD_NAME):
+    net_profit = total_revenue - total_costs
 
     # Determine the color based on whether the net profit is positive or negative
     if net_profit >= 0:
@@ -219,13 +220,43 @@ def log_final_net_profit(total_profit, total_costs, log_folder_path):
         color = Fore.RED
         profit_status = "Loss"
 
-    message = f"Final Net {profit_status}: ${net_profit:.6f}"
-    print(f"\n{color}{Style.BRIGHT}\033[4m{message}{Style.RESET_ALL}\n")
+    final_net_profit_message = f"Final Net {profit_status}: ${net_profit:.6f}"
+    print(f"\n{color}{Style.BRIGHT}\033[4m{final_net_profit_message}{Style.RESET_ALL}\n")
 
     # Save to log file (without colors)
     if SAVE_LOGS:
         log_file_path = os.path.join(log_folder_path, 'final_net_profit.log')
         with open(log_file_path, 'a') as log_file:
-            log_file.write(message + '\n')
+            
+            if MASTER_MODEL:
+                model_message = f"Master Model: {MASTER_MODEL}"
+                log_file.write(model_message + '\n')
+
+            if REAL_DATA:
+                trace_message = f"Trace: {WORKLOAD_NAME}"
+                log_file.write(trace_message + '\n')
+            elif USE_RANDOM_SEED:
+                seed_message = f"Random Seed Number: {SEED_NUMBER}"
+                log_file.write(seed_message + '\n')
+            
+            time_step_message = f"Time Step: {TIME_STEP}"
+            log_file.write(time_step_message + '\n')
+
+            final_step_message = f"Final Step: {final_step}"
+            log_file.write(final_step_message + '\n')
+
+            log_file.write('=============================\n')
+
+            total_revenue_message = f"Total Revenue Gained from Completed VMs: ${total_revenue:.6f}"
+            log_file.write(total_revenue_message + '\n')
+            total_costs_message = f"Total Costs Incurred: ${total_costs:.6f}"
+            log_file.write(total_costs_message + '\n')
+            log_file.write('------------------------------------------\n')
+            log_file.write(f"Completed migrations: {num_completed_migrations}\n")
+            log_file.write(f"Removed VMs: {num_removed_vms}\n")
+            log_file.write(f"Max percentage of PMs on: {max_percentage_of_pms_on}\n")
+            log_file.write('------------------------------------------\n')
+            log_file.write(final_net_profit_message + '\n')
+            
 
     

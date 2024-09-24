@@ -93,7 +93,6 @@ tuple Point {
 // Data
 {PhysicalMachine} physical_machines = ...;
 {VirtualMachine} virtual_machines= ...;
-float latency[pm in physical_machines][pm in physical_machines] = ...;
 int nb_points = ...;
 Point power_function[pm in physical_machines][1..nb_points]= ...;
 
@@ -119,6 +118,8 @@ pwlFunction dynamic_energy[pm in physical_machines] =
   piecewise (p in 1..nb_points){slopeBeforePoint[pm][p] -> power_function[pm][p].x; 0} (0, 0);
 
 dvar boolean allocation[virtual_machines][physical_machines];
+dvar boolean is_on[physical_machines];
+
 dexpr float cpu_load[pm in physical_machines] = pm.s.load.cpu + (1 / pm.capacity.cpu) * sum(vm in virtual_machines) vm.requested.cpu * allocation[vm][pm];
 dexpr float memory_load[pm in physical_machines] = pm.s.load.memory + (1 / pm.capacity.memory) * sum(vm in virtual_machines) vm.requested.memory * allocation[vm][pm]; 
 dexpr float additional_energy[pm in physical_machines] = 
@@ -128,7 +129,7 @@ dexpr float additional_energy[pm in physical_machines] =
 float profit[vm in virtual_machines] = (vm.requested.cpu * price.cpu + vm.requested.memory * price.memory);                   
 
 maximize   sum(pm in physical_machines) ( 
-	         - PUE * energy.cost * additional_energy[pm]
+	         - PUE * energy.cost * (is_on[pm] * static_energy[pm] + additional_energy[pm])
 		     + sum (vm in virtual_machines) ( 
         		   allocation[vm][pm] * profit[vm] * vm.run.total_time / ((remaining_allocation_time[vm] + remaining_run_time[vm]) / pm.features.speed) // allocation case
 		  	   )
@@ -152,5 +153,9 @@ subject to {
   // Physical Machine Memory capacity
   forall(pm in physical_machines) {
     memory_load[pm] <= 1; 
+  }
+  forall(pm in physical_machines) {
+    is_on[pm] >= cpu_load[pm];
+    is_on[pm] >= memory_load[pm];
   }
 }    

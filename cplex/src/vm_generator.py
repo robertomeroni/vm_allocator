@@ -10,9 +10,11 @@ def generate_new_vms(active_vms, new_vms_per_step, existing_ids):
         requested_memory = np.random.choice([4, 8, 16, 32, 64])
         run_total_time = np.random.uniform(30.0, 600.0)
 
-        profit = (requested_cpu * price['cpu'] + requested_memory * price['memory']) * run_total_time
+        revenue = (requested_cpu * price['cpu'] + requested_memory * price['memory']) * run_total_time
 
-        migration_total_time = migration['time']['offset'] + migration['time']['coefficient'] * requested_memory
+        migration_first_round_time = requested_memory / migration['time']['network_bandwidth']
+        migration_down_time = migration['time']['resume_vm_on_target'] + migration_first_round_time * migration['time']['memory_dirty_rate'] / migration['time']['network_bandwidth']
+        migration_total_time = migration_first_round_time + migration_down_time
 
         new_vm = {
             'id': new_vm_id,
@@ -33,11 +35,11 @@ def generate_new_vms(active_vms, new_vms_per_step, existing_ids):
             'migration': {
                 'current_time': 0.0,
                 'total_time': round(migration_total_time, 5),
+                'down_time': round(migration_down_time, 5),
                 'from_pm': -1,
                 'to_pm': -1
             },
-            'group': np.random.randint(1, 10),  
-            'profit': round(profit, 5)  # Calculated profit based on requested resources
+            'revenue': round(revenue, 5)  # Calculated revenue based on requested resources
         }
         active_vms.append(new_vm)
         existing_ids.add(new_vm_id)

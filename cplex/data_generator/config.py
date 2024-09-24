@@ -1,12 +1,13 @@
+import os
+
 # Configuration for Physical Machines
 pm_config = {
-    'cpu_capacity': [4, 8, 16, 32, 64, 128, 256],         # Available CPU capacities in cores
-    'memory_capacity': [16, 32, 64, 128, 256, 512],   # Available memory capacities in GB
-    'speed_range': (0.2, 5.0),              # Speed range for the machines 
-    'time_to_turn_on_range': (30.0, 180.0), # Time to turn on range in seconds
-    'time_to_turn_off_range': (15.0, 90.0), # Time to turn off range in seconds
-    'state_percentage': 50,                  # Percentage of physical machines that are ON initially
-    'latency_range': (0.1, 0.5)             # Range of latencies between machines in milliseconds
+    'cpu_capacity': [32, 64, 128, 256, 512, 1024, 2048],      # Available CPU capacities in cores
+    'memory_capacity': [16, 32, 64, 128, 256, 512, 1024, 2048, 4096],    # Available memory capacities in GB
+    'speed_range': (1, 1),                         # Speed range for the machines 
+    'time_to_turn_on_range': (30.0, 180.0),            # Time to turn on range in seconds
+    'time_to_turn_off_range': (15.0, 90.0),            # Time to turn off range in seconds
+    'state_percentage': 0,                            # Percentage of physical machines that are ON initially
 }
 
 # Configuration for Virtual Machines
@@ -17,9 +18,19 @@ vm_config = {
     'execution_time_range': (2.0, 6.0),     # Range for execution time in seconds
 }
 
-# Configuration for Network
-network_config = {
-    'network_bandwidth': 10.0  # Network bandwidth for migration time calculation in GB/s
+migration = {
+    'time': {  # in seconds
+        'memory_dirty_rate': 0.1,  # GB of memory that gets dirty per second during live migration
+        'network_bandwidth': 10.0,  # GB/s
+        'resume_vm_on_target': 20.0 / 10**3,  # in seconds
+    },
+    'energy': {  
+        'cpu_overhead': {
+            'source': 0.015,
+            'target': 0.017,
+        },
+        'concurrent': 0.016
+    }
 }
 
 # Default Values for the Number of Machines
@@ -30,9 +41,8 @@ default_values = {
 }
 
 # Data Folder Path
-data_folder_path = 'model/data'
-
-
+base_path = '/home/roberto/job/vm_allocator/cplex'
+data_folder_path = os.path.join(base_path, 'model/data')
 
 
 # Convenience Aliases for Easy Access
@@ -42,14 +52,15 @@ pm_speed_range = pm_config['speed_range']
 pm_time_to_turn_on_range = pm_config['time_to_turn_on_range']
 pm_time_to_turn_off_range = pm_config['time_to_turn_off_range']
 state_percentage = pm_config['state_percentage']
-latency_range = pm_config['latency_range']
 
 vm_requested_cpu = vm_config['requested_cpu']
 vm_requested_memory = vm_config['requested_memory']
 allocation_time_range = vm_config['allocation_time_range']
 execution_time_range = vm_config['execution_time_range']
 
-network_bandwidth = network_config['network_bandwidth']
+migration_time_memory_dirty_rate = migration['time']['memory_dirty_rate']
+migration_time_network_bandwidth = migration['time']['network_bandwidth']
+migration_time_resume_vm_on_target = migration['time']['resume_vm_on_target']
 
 default_num_physical_machines = default_values['num_physical_machines']
 default_num_virtual_machines = default_values['num_virtual_machines']

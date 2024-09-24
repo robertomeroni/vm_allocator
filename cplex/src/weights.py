@@ -36,5 +36,10 @@ migration = {
     }
 }
 
+safety_margin = 0.7
+
 w_load_cpu = 0.8 # How much the load of the CPU affects the energy consumption (compared to memory)
 expected_runtime_factor = 0.9  # What is the expected real completion time of a task compared to the declared run time: run time / real completion time (allocation time + run time + eventual migration time)
+
+step_window_for_online_prediction = 10
+step_window_for_weights_accuracy = 30

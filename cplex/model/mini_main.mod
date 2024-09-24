@@ -8,16 +8,13 @@ main {
   var physicalMachinesFile = "physical_machines.dat";
   var virtualMachinesFile = "virtual_machines.dat";
   var weightsFile = "weights.dat";
-  var latencyFile = "latency.dat";
-  var powerConsumptionFile ="power_consumption.dat"
+  var settingsFile="epgap_0.01.ops"
   
   // Create complete paths by concatenating folder paths and file names
   var modelPath = folderPath + modelFile;
   var physicalMachinesPath = inputFolderPath + physicalMachinesFile;
   var virtualMachinesPath = inputFolderPath + virtualMachinesFile;
   var weightsPath = inputFolderPath + weightsFile;
-  var latencyPath = inputFolderPath + latencyFile;
-  var powerConsumptionPath = inputFolderPath + powerConsumptionFile;
   
   var source = new IloOplModelSource(modelPath);
   var cplex = new IloCplex();
@@ -27,14 +24,11 @@ main {
   var physical_machines = new IloOplDataSource(physicalMachinesPath);
   var virtual_machines = new IloOplDataSource(virtualMachinesPath);
   var weights = new IloOplDataSource(weightsPath);
-  var latency = new IloOplDataSource(latencyPath);
-  var power_consumption = new IloOplDataSource(powerConsumptionPath);
   
   model.addDataSource(physical_machines);
   model.addDataSource(virtual_machines);
   model.addDataSource(weights);
-  model.addDataSource(latency);
-  model.addDataSource(power_consumption);
+  model.applyOpsSettings(folderPath, settingsFile)
   
   model.generate();
   
@@ -80,7 +74,6 @@ main {
   model.end();
   physical_machines.end();
   virtual_machines.end();
-  latency.end
   def.end();
   cplex.end();
   source.end();

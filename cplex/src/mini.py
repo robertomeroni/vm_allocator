@@ -1,5 +1,5 @@
 import os, shutil, subprocess, re
-from utils import convert_vms_to_model_input_format, convert_pms_to_model_input_format, parse_matrix
+from utils import convert_vms_to_model_input_format, convert_pms_to_model_input_format, convert_power_function_to_model_input_format, parse_matrix
 from config import MINI_MODEL_INPUT_FOLDER_PATH, MODEL_OUTPUT_FOLDER_PATH, MINI_MODEL_PATH
 
 def save_mini_model_input_format(vms, pms, step, model_input_folder_path):
@@ -11,13 +11,14 @@ def save_mini_model_input_format(vms, pms, step, model_input_folder_path):
     
     formatted_vms = convert_vms_to_model_input_format(vms)
     formatted_pms = convert_pms_to_model_input_format(pms)
+    formatted_power_function = convert_power_function_to_model_input_format(pms)
     
     with open(vm_model_input_file_path, 'w') as file:
         file.write(formatted_vms)
     
     with open(pm_model_input_file_path, 'w') as file:
         file.write(formatted_pms)
-    
+        file.write(formatted_power_function)
     return vm_model_input_file_path, pm_model_input_file_path
 
 def run_mini_opl_model(vm_model_input_file_path, pm_model_input_file_path, model_output_folder_path, step):
