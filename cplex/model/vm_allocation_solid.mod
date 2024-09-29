@@ -101,7 +101,6 @@ float time_window = ...;
 
 float remaining_allocation_time[vm in virtual_machines] = vm.allocation.total_time - vm.allocation.current_time;
 float remaining_run_time[vm in virtual_machines] = vm.run.total_time - vm.run.current_time;
-float remaining_migration_time[vm in virtual_machines] = vm.migration.total_time - vm.migration.current_time;
 
 int is_fully_turned_on[pm in physical_machines] =
   (pm.s.time_to_turn_on <= 0 ? 1 : 0); 
@@ -151,11 +150,10 @@ dvar boolean is_migration[virtual_machines];
 dvar boolean is_first_migration[virtual_machines];
 dvar boolean is_migrating_on[virtual_machines][physical_machines];
 dvar boolean is_migrating_from[virtual_machines][physical_machines];
+dvar boolean is_source[physical_machines];
+dvar boolean is_target[physical_machines];
 dvar boolean is_multiple_migrations[physical_machines];
 dvar boolean has_to_be_on[physical_machines];
-dvar float max_migration_source[physical_machines];
-dvar float max_migration_target[physical_machines];
-dvar float max_migration_multiple[physical_machines];
 
 // Expressions
 dexpr float cpu_load[pm in physical_machines] = (1 / pm.capacity.cpu) * sum(vm in virtual_machines) vm.requested.cpu * new_allocation[vm][pm];
@@ -171,7 +169,7 @@ maximize   sum(pm in physical_machines) (
 	         - PUE * energy.cost * (
 	         		 static_power[pm] * has_to_be_on[pm]
 	               + dynamic_power[pm] (
-		                 w_load_cpu * (cpu_load[pm] + migration.energy.cpu_overhead.source * max_migration_source[pm] + migration.energy.cpu_overhead.target * max_migration_target[pm] + 0.5 * migration.energy.concurrent * is_multiple_migrations[pm]) 
+		                 w_load_cpu * (cpu_load[pm] + migration.energy.cpu_overhead.source * is_source[pm] + migration.energy.cpu_overhead.target * is_target[pm] + migration.energy.concurrent * is_multiple_migrations[pm]) 
 		               + (1 - w_load_cpu) * memory_load[pm]
 		             ) * is_on[pm] 
                )
@@ -310,24 +308,15 @@ subject to {
   forall (pm in physical_machines) {
     M * is_on[pm] >= sum(vm in virtual_machines) is_migrating_on[vm][pm];
   }
-  //  Max source migrations time
+  // If at least one migration is happening from a PM, PM is a source
   forall (pm in physical_machines) {
-    forall (vm in virtual_machines) {
-    max_migration_source[pm] >= is_migrating_from[vm][pm] * remaining_migration_time[vm] / remaining_run_time[vm]; 
-    }    
+    is_source[pm] <= sum(vm in virtual_machines) is_migrating_from[vm][pm]; 
+    M * is_source[pm] >= sum(vm in virtual_machines) is_migrating_from[vm][pm]; 
   }
-  //  Max target migrations time
+  // If at least one migration is happening on a PM, PM is a target
   forall (pm in physical_machines) {
-    forall (vm in virtual_machines) {
-    max_migration_target[pm] >= is_migrating_on[vm][pm] * remaining_migration_time[vm] / remaining_run_time[vm]; 
-    }    
-  }
-  // Max multiple migrations time
-  forall (pm in physical_machines) {
-    forall (vm in virtual_machines) {
-    max_migration_multiple[pm] + is_multiple_migrations[pm] >= is_migrating_from[vm][pm] * remaining_migration_time[vm] / remaining_run_time[vm]; 
-    max_migration_multiple[pm] + is_multiple_migrations[pm] >= is_migrating_on[vm][pm] * remaining_migration_time[vm] / remaining_run_time[vm]; 
-    }    
+    is_target[pm] <= sum(vm in virtual_machines) is_migrating_on[vm][pm]; 
+    M * is_target[pm] >= sum(vm in virtual_machines) is_migrating_on[vm][pm]; 
   }
   // If two or more migrations are happening from or on a PM, multiple migrations are happening at PM
   forall (pm in physical_machines) {

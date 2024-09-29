@@ -4,7 +4,7 @@ main {
   var inputFolderPath = "model/data/scalability_test/";
 
   // Define file names
-  var modelFile = "vm_allocation_mini.mod";
+  var modelFile = "vm_allocation.mod";
   var physicalMachinesFile = "physical_machines.dat";
   var virtualMachinesFile = "virtual_machines.dat";
   var weightsFile = "weights.dat";
