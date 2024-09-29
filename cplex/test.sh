@@ -4,24 +4,26 @@
 USE_RANDOM_SEED_VALUES=(True)
 SEED_NUMBER_VALUES=($(seq 1 1))  # This creates a range from 1 to 20
 STARTING_STEP_VALUES=(1)
-TIME_STEP_VALUES=(250)
+TIME_STEP_VALUES=(50)
 NUM_TIME_STEPS_VALUES=(10000)
 NEW_VMS_PER_STEP_VALUES=(1)
 MAIN_MODEL_PERIOD_VALUES=(4)
-MINI_MODEL_PERIOD_VALUES=(2)
+MINI_MODEL_PERIOD_VALUES=(1)
 MASTER_MODEL_VALUES=(
                     'main' 
                     'mini'
-                    # 'mixed'
+                    'mixed'
                     'best_fit' 
-                    'guazzone'
+                    # 'guazzone'
                     'shi'
                     )
 WORKLOAD_NAME_VALUES=(
-                    'KIT-FH2-2016'
-                    'UniLu-Gaia-2014'
-                    'METACENTRUM-2009'
-                    'PIK-IPLEX-2009'
+                    # 'KIT-FH2-2016'
+                    # 'UniLu-Gaia-2014'
+                    # 'METACENTRUM-2009'
+                    # 'PIK-IPLEX-2009'
+                    # 'LLNL-Thunder-2007'
+                    'Intel-NetbatchA-2012'
                     )
 USE_WORKLOAD_PREDICTOR_VALUES=(False)
 
@@ -122,6 +124,8 @@ for USE_RANDOM_SEED in "${USE_RANDOM_SEED_VALUES[@]}"; do
                             # Extract the last occurrence of Total Revenue and Total Costs from the cleaned output log file
                             TOTAL_REVENUE=$(grep "Total Revenue Gained from Completed VMs" "$CLEANED_OUTPUT_LOG_FILE" | tail -n 1 | awk -F': ' '{print $2}')
                             TOTAL_COSTS=$(grep "Total Costs Incurred" "$CLEANED_OUTPUT_LOG_FILE" | tail -n 1 | awk -F': ' '{print $2}')
+                            TOTAL_MIGRATION_ENERGY_COST=$(grep "Total Migration Energy Cost" "$CLEANED_OUTPUT_LOG_FILE" | tail -n 1 | awk -F': ' '{print $2}')
+                            TOTAL_PM_ENERGY_COST=$(grep "Total PM Energy Cost" "$CLEANED_OUTPUT_LOG_FILE" | tail -n 1 | awk -F': ' '{print $2}')
                             FINAL_NET_PROFIT=$(grep "Final Net Profit" "$CLEANED_OUTPUT_LOG_FILE" | tail -n 1 | awk -F': ' '{print $2}')
                             COMPLETED_MIGRATIONS=$(grep "Completed migrations" "$CLEANED_OUTPUT_LOG_FILE" | tail -n 1 | awk -F': ' '{print $2}')
                             REMOVED_VMS=$(grep "Removed VMs" "$CLEANED_OUTPUT_LOG_FILE" | tail -n 1 | awk -F': ' '{print $2}')
@@ -138,7 +142,10 @@ for USE_RANDOM_SEED in "${USE_RANDOM_SEED_VALUES[@]}"; do
                             echo "Max percentage of PMs on: $MAX_PERCENTAGE_OF_PMS_ON" >> "$RESULTS_FILE"
                             echo "------------------------------------------" >> "$RESULTS_FILE"
                             echo "Total Revenue: $TOTAL_REVENUE" >> "$RESULTS_FILE"
+                            echo "" >> "$RESULTS_FILE"
                             echo "Total Costs: $TOTAL_COSTS" >> "$RESULTS_FILE"
+                            echo "Total PM Energy Cost: $TOTAL_PM_ENERGY_COST" >> "$RESULTS_FILE"
+                            echo "Total Migration Energy Cost: $TOTAL_MIGRATION_ENERGY_COST" >> "$RESULTS_FILE"
                             echo "" >> "$RESULTS_FILE"
                             echo "Final Net Profit: $FINAL_NET_PROFIT" >> "$RESULTS_FILE"
                             echo "=============================" >> "$RESULTS_FILE"
@@ -153,6 +160,9 @@ for USE_RANDOM_SEED in "${USE_RANDOM_SEED_VALUES[@]}"; do
                             echo "Max percentage of PMs on: $MAX_PERCENTAGE_OF_PMS_ON"
                             echo "------------------------------------------"
                             echo "Total Revenue: $TOTAL_REVENUE"
+                            echo ""
+                            echo "Total PM Energy Cost: $TOTAL_PM_ENERGY_COST"
+                            echo "Total Migration Energy Cost: $TOTAL_MIGRATION_ENERGY_COST"
                             echo "Total Costs: $TOTAL_COSTS"
                             echo ""
                             echo "Final Net Profit: $FINAL_NET_PROFIT"

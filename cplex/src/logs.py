@@ -209,7 +209,7 @@ def log_allocation(step, active_vms, old_active_vms, terminated_vms, removed_vms
     if PRINT_TO_CONSOLE:
         print('\n'.join(console_lines))
 
-def log_final_net_profit(total_revenue, total_costs, num_completed_migrations, num_removed_vms, max_percentage_of_pms_on, log_folder_path, MASTER_MODEL, USE_RANDOM_SEED, SEED_NUMBER, TIME_STEP, final_step, REAL_DATA, WORKLOAD_NAME):
+def log_final_net_profit(total_revenue, total_costs, total_pm_energy_cost, total_migration_energy_cost, num_completed_migrations, num_removed_vms, max_percentage_of_pms_on, log_folder_path, MASTER_MODEL, USE_RANDOM_SEED, SEED_NUMBER, TIME_STEP, final_step, REAL_DATA, WORKLOAD_NAME):
     net_profit = total_revenue - total_costs
 
     # Determine the color based on whether the net profit is positive or negative
@@ -251,6 +251,10 @@ def log_final_net_profit(total_revenue, total_costs, num_completed_migrations, n
             log_file.write(total_revenue_message + '\n')
             total_costs_message = f"Total Costs Incurred: ${total_costs:.6f}"
             log_file.write(total_costs_message + '\n')
+            total_pm_energy_cost_message = f"Total PM Energy Cost: ${total_pm_energy_cost:.6f}"
+            log_file.write(total_pm_energy_cost_message + '\n')
+            total_migration_energy_cost_message = f"Total Migration Energy Cost: ${total_migration_energy_cost:.6f}"
+            log_file.write(total_migration_energy_cost_message + '\n')
             log_file.write('------------------------------------------\n')
             log_file.write(f"Completed migrations: {num_completed_migrations}\n")
             log_file.write(f"Removed VMs: {num_removed_vms}\n")

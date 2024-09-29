@@ -73,7 +73,7 @@ if VMS_TRACE_FILE and not os.path.isabs(VMS_TRACE_FILE) and not os.path.exists(V
 
 from logs import log_initial_physical_machines, log_allocation, log_final_net_profit
 from vm_generator import generate_new_vms
-from utils import load_virtual_machines, load_physical_machines, get_start_time, get_first_vm_arrival_time, get_last_vm_arrival_time, load_configuration, save_power_function, save_vm_sets, save_pm_sets, save_model_input_format, parse_opl_output, parse_power_function, evaluate_piecewise_linear_function, calculate_load, clean_up_model_input_files, load_new_vms, check_overload, check_migration_overload, check_unique_state, check_zero_load, check_migration_correctness
+from utils import load_virtual_machines, load_physical_machines, get_start_time, get_first_vm_arrival_time, get_last_vm_arrival_time, load_configuration, save_power_function, save_vm_sets, save_pm_sets, save_model_input_format, parse_opl_output, parse_power_function, evaluate_piecewise_linear_function, calculate_load, clean_up_model_input_files, load_new_vms, check_overload, check_migration_overload, check_unique_state, check_zero_load, check_migration_correctness, find_migration_times
 from allocation import run_opl_model, reallocate_vms, update_physical_machines_state, detect_overload, update_physical_machines_load, deallocate_vms
 from mini import save_mini_model_input_format, run_mini_opl_model, parse_mini_opl_output, mini_reallocate_vms
 from algorithms import best_fit, guazzone_bfd, shi_migration, shi_online
@@ -178,26 +178,79 @@ def execute_time_step(active_vms, terminated_vms, scheduled_vms, physical_machin
 
     return num_completed_migrations
 
-def calculate_total_costs(active_vms, physical_machines, cpu_load, memory_load):
-    migration_energy_consumption = [0.0] * len(active_vms)
-    load_energy_consumption = [0.0] * len(physical_machines)
+def find_migration_times(active_vms, pm):
+    pm_id = pm['id']
+    
+    # Collect remaining migration times for VMs migrating from pm_id
+    source_vm_times = sorted(
+        [vm['migration']['total_time'] - vm['migration']['current_time'] 
+         for vm in active_vms if vm['migration']['from_pm'] == pm_id], 
+        reverse=True
+    )
+    
+    # Collect remaining migration times for VMs migrating to pm_id
+    target_vm_times = sorted(
+        [vm['migration']['total_time'] - vm['migration']['current_time'] 
+         for vm in active_vms if vm['migration']['to_pm'] == pm_id], 
+        reverse=True
+    )
 
-    cpu_power = 0.0
-    memory_power = 0.0
-    turning_on_energy = 0.0
-    turning_off_energy = 0.0
+    # Max and second max times for source VMs
+    max_time_source = source_vm_times[0] if source_vm_times else 0
+    second_max_time_source = source_vm_times[1] if len(source_vm_times) > 1 else 0
+
+    # Max and second max times for target VMs
+    max_time_target = target_vm_times[0] if target_vm_times else 0
+    second_max_time_target = target_vm_times[1] if len(target_vm_times) > 1 else 0
+
+    # Compute effective times
+    real_time_only_source = max_time_source
+    real_time_only_target = max_time_target
+    real_time_multiple_source = max_time_source - second_max_time_source
+    real_time_multiple_target = max_time_target - second_max_time_target
+
+    # Combined times for both source and target VMs
+    combined_times = sorted(source_vm_times + target_vm_times, reverse=True)
+    max_combined_time = combined_times[0] if combined_times else 0
+    second_max_combined_time = combined_times[1] if len(combined_times) > 1 else 0
+    real_time_multiple_source_and_target = max_combined_time - second_max_combined_time
+
+    return (
+        real_time_only_source, 
+        real_time_only_target, 
+        real_time_multiple_source, 
+        real_time_multiple_target, 
+        real_time_multiple_source_and_target
+    )
+
+
+def calculate_total_costs(active_vms, physical_machines, cpu_load, memory_load):
+    migration_energy_consumption = [0.0] * len(physical_machines)
+    pm_energy_consumption = [0.0] * len(physical_machines)
+    load_energy_consumption = [0.0] * len(physical_machines)
     
     pm_ids = [pm['id'] for pm in physical_machines]
     nb_points, power_function = parse_power_function(POWER_FUNCTION_FILE, pm_ids)
 
     for pm in physical_machines:
-        cpu_power = 0.0
-        memory_power = 0.0
         turning_on_energy = 0.0
         turning_off_energy = 0.0
+        real_time_base = 0.0
+        real_time_only_source = 0.0
+        real_time_only_target = 0.0
+        real_time_multiple_source = 0.0
+        real_time_multiple_target = 0.0
+        real_time_multiple_source_and_target = 0.0
+        power_base = 0.0
+        power_migration_source = 0.0
+        power_migration_target = 0.0
+        power_migration_multiple_source = 0.0
+        power_migration_multiple_target = 0.0
+        power_migration_multiple_source_and_target = 0.0
 
         if pm['s']['state'] == 1 and pm['s']['time_to_turn_on'] == 0:
             cpu_migration_overhead = 0.0
+
             migration_overhead_source = False
             migration_overhead_target = False
             multiple_migrations = False
@@ -221,8 +274,15 @@ def calculate_total_costs(active_vms, physical_machines, cpu_load, memory_load):
             
             check_migration_overload(cpu_migration_overhead, migration_overhead_source, migration_overhead_target, multiple_migrations)
             
-            cpu_power = w_load_cpu * evaluate_piecewise_linear_function(power_function[pm['id']], cpu_load[pm['id']], cpu_migration_overhead)  
-            memory_power = (1 - w_load_cpu) * evaluate_piecewise_linear_function(power_function[pm['id']], memory_load[pm['id']])
+            power_base = evaluate_piecewise_linear_function(power_function[pm['id']], w_load_cpu * cpu_load[pm['id']] + (1 - w_load_cpu) * memory_load[pm['id']])
+            power_migration_source = evaluate_piecewise_linear_function(power_function[pm['id']], w_load_cpu * cpu_load[pm['id']] + (1 - w_load_cpu) * memory_load[pm['id']], migration['energy']['cpu_overhead']['source'])  
+            power_migration_target = evaluate_piecewise_linear_function(power_function[pm['id']], w_load_cpu * cpu_load[pm['id']] + (1 - w_load_cpu) * memory_load[pm['id']], migration['energy']['cpu_overhead']['target'])  
+            power_migration_multiple_source = evaluate_piecewise_linear_function(power_function[pm['id']], w_load_cpu * cpu_load[pm['id']] + (1 - w_load_cpu) * memory_load[pm['id']], migration['energy']['concurrent'] + migration['energy']['cpu_overhead']['source'])
+            power_migration_multiple_target = evaluate_piecewise_linear_function(power_function[pm['id']], w_load_cpu * cpu_load[pm['id']] + (1 - w_load_cpu) * memory_load[pm['id']], migration['energy']['concurrent'] + migration['energy']['cpu_overhead']['target'])
+            power_migration_multiple_source_and_target = evaluate_piecewise_linear_function(power_function[pm['id']], w_load_cpu * cpu_load[pm['id']] + (1 - w_load_cpu) * memory_load[pm['id']], migration['energy']['concurrent'] + migration['energy']['cpu_overhead']['source'] + migration['energy']['cpu_overhead']['target'])
+            
+            real_time_only_source, real_time_only_target, real_time_multiple_source, real_time_multiple_target, real_time_multiple_source_and_target = find_migration_times(active_vms, pm)
+            real_time_base = max(0, TIME_STEP - real_time_only_source - real_time_only_target - real_time_multiple_source - real_time_multiple_target - real_time_multiple_source_and_target)
         
         elif pm['s']['state'] == 1 and pm['s']['time_to_turn_on'] > 0:
             turning_on_power = evaluate_piecewise_linear_function(power_function[pm['id']], 0) 
@@ -232,13 +292,15 @@ def calculate_total_costs(active_vms, physical_machines, cpu_load, memory_load):
             turning_off_power = evaluate_piecewise_linear_function(power_function[pm['id']], 0) 
             turning_off_energy = turning_off_power * min(TIME_STEP, pm['s']['time_to_turn_off'])
 
-        load_energy_consumption[pm['id']] = (cpu_power + memory_power) * TIME_STEP + turning_on_energy + turning_off_energy
+        load_energy_consumption = real_time_base * power_base
+        pm_energy_consumption[pm['id']] = turning_on_energy + turning_off_energy + load_energy_consumption
+        migration_energy_consumption[pm['id']] = real_time_only_source * power_migration_source + real_time_only_target * power_migration_target + real_time_multiple_source * power_migration_multiple_source + real_time_multiple_target * power_migration_multiple_target + real_time_multiple_source_and_target * power_migration_multiple_source_and_target
 
-    total_energy_consumption = sum(load_energy_consumption) + sum(migration_energy_consumption)
-    costs = total_energy_consumption * energy['cost'] * pue
+    pm_costs = sum(pm_energy_consumption) * energy['cost'] * pue
+    migration_costs = sum(migration_energy_consumption) * energy['cost'] * pue
+    total_costs = pm_costs + migration_costs
     
-    return costs
-
+    return total_costs, pm_costs, migration_costs
 
 def calculate_total_revenue(terminated_vms):
     total_revenue = sum(vm['revenue'] for vm in terminated_vms)
@@ -263,6 +325,8 @@ def simulate_time_steps(initial_vms, initial_pms, num_steps, new_vms_per_step, l
     num_removed_vms = 0
     max_percentage_of_pms_on = 0
     total_costs = 0.0
+    total_pm_energy_consumption = 0.0
+    total_migration_energy_consumption = 0.0
 
     for pm in physical_machines:
         if pm['s']['state'] == 0:
@@ -461,9 +525,12 @@ def simulate_time_steps(initial_vms, initial_pms, num_steps, new_vms_per_step, l
         num_removed_vms += len(removed_vms)
 
         # Calculate costs and revenue
-        total_costs += calculate_total_costs(active_vms, physical_machines, cpu_load, memory_load)
+        step_total_costs, pm_energy_consumption, migration_energy_consumption = calculate_total_costs(active_vms, physical_machines, cpu_load, memory_load)
         total_revenue = calculate_total_revenue(terminated_vms)
-
+        total_costs += step_total_costs
+        total_pm_energy_consumption += pm_energy_consumption
+        total_migration_energy_consumption += migration_energy_consumption
+        
         # Log current allocation and physical machine load
         log_allocation(step, active_vms, old_active_vms, terminated_vms, removed_vms, turned_on_pms, turned_off_pms, physical_machines, cpu_load, memory_load, total_revenue, total_costs, log_folder_path)
         old_active_vms = deepcopy(active_vms)
@@ -486,10 +553,13 @@ def simulate_time_steps(initial_vms, initial_pms, num_steps, new_vms_per_step, l
             if len(active_vms) == 0:
                 break
 
-    return total_revenue, total_costs, num_completed_migrations, num_removed_vms, max_percentage_of_pms_on, step
+    return total_revenue, total_costs, total_pm_energy_consumption, total_migration_energy_consumption, num_completed_migrations, num_removed_vms, max_percentage_of_pms_on, step
 
 
 if __name__ == "__main__":
+    if PERFORMANCE_MEASUREMENT:
+        total_start_time = time.time()  # Record the start time
+
     initial_vms = load_virtual_machines(os.path.expanduser(INITIAL_VMS_FILE))
     initial_pms = load_physical_machines(os.path.expanduser(INITIAL_PMS_FILE))
     log_folder_path = None
@@ -499,9 +569,21 @@ if __name__ == "__main__":
         start_time_str = get_start_time(WORKLOAD_NAME)
     load_configuration(MODEL_INPUT_FOLDER_PATH)
     save_power_function(os.path.expanduser(INITIAL_PMS_FILE), MODEL_INPUT_FOLDER_PATH)
-    total_revenue, total_costs, num_completed_migrations, num_removed_vms, max_percentage_of_pms_on, final_step = simulate_time_steps(initial_vms, initial_pms, NUM_TIME_STEPS, NEW_VMS_PER_STEP, log_folder_path)
-    log_final_net_profit(total_revenue, total_costs, num_completed_migrations, num_removed_vms, max_percentage_of_pms_on, log_folder_path, MASTER_MODEL, USE_RANDOM_SEED, SEED_NUMBER, TIME_STEP, final_step, USE_REAL_DATA, WORKLOAD_NAME)
+    total_revenue, total_costs, total_pm_energy_cost, total_migration_energy_cost, num_completed_migrations, num_removed_vms, max_percentage_of_pms_on, final_step = simulate_time_steps(initial_vms, initial_pms, NUM_TIME_STEPS, NEW_VMS_PER_STEP, log_folder_path)
+    log_final_net_profit(total_revenue, total_costs, total_pm_energy_cost, total_migration_energy_cost, num_completed_migrations, num_removed_vms, max_percentage_of_pms_on, log_folder_path, MASTER_MODEL, USE_RANDOM_SEED, SEED_NUMBER, TIME_STEP, final_step, USE_REAL_DATA, WORKLOAD_NAME)
     clean_up_model_input_files()
+
+    if PERFORMANCE_MEASUREMENT:
+        total_end_time = time.time()  # Record the end time
+        total_execution_time = total_end_time - total_start_time  # Calculate the total execution time
+        performance_log_file = os.path.join(log_folder_path, "performance_log.csv")
+        with open(performance_log_file, "a", newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(["Total Execution Time", total_execution_time])  # Log the total execution time
+        print(f"Total execution time: {total_execution_time} seconds")
+
+    print(f"Total PM Energy Cost: {total_pm_energy_cost}")
+    print(f"Total Migration Energy Cost: {total_migration_energy_cost}")
     print(f"Completed migrations: {num_completed_migrations}")
     print(f"Removed VMs: {num_removed_vms}")
     print(f"Max percentage of PMs on: {max_percentage_of_pms_on}")

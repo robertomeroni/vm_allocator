@@ -2,12 +2,13 @@ import os
 
 # Configuration for Physical Machines
 pm_config = {
-    'cpu_capacity': [32, 64, 128, 256, 512, 1024, 2048, 4096],      # Available CPU capacities in cores
-    'memory_capacity': [16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192],    # Available memory capacities in GB
-    'speed_range': (1, 1),                         # Speed range for the machines 
-    'time_to_turn_on_range': (30.0, 180.0),            # Time to turn on range in seconds
-    'time_to_turn_off_range': (15.0, 90.0),            # Time to turn off range in seconds
+    'cpu_capacity': [256, 512, 1024, 2048, 4096, 8192, 12288, 16384, 32768, 65536],      # Available CPU capacities in cores
+    'memory_capacity': [512, 1024, 2048, 4096, 8192, 12288, 16384, 32768, 65536],    # Available memory capacities in GB
+    'speed_range': (1.0, 1.0),                         # Speed range for the machines 
+    'time_to_turn_on_range': (300.0, 1800.0),            # Time to turn on range in seconds
+    'time_to_turn_off_range': (150.0, 900.0),            # Time to turn off range in seconds
     'state_percentage': 0,                            # Percentage of physical machines that are ON initially
+    'latency_range': (0.1, 0.5)                        # Range of latencies between machines in milliseconds
 }
 
 # Configuration for Virtual Machines
@@ -52,6 +53,7 @@ pm_speed_range = pm_config['speed_range']
 pm_time_to_turn_on_range = pm_config['time_to_turn_on_range']
 pm_time_to_turn_off_range = pm_config['time_to_turn_off_range']
 state_percentage = pm_config['state_percentage']
+latency_range = pm_config['latency_range']
 
 vm_requested_cpu = vm_config['requested_cpu']
 vm_requested_memory = vm_config['requested_memory']

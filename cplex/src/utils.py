@@ -43,7 +43,7 @@ def load_new_vms(vms_trace_file_path):
             },
             'allocation': {
                 'current_time': 0.0,
-                'total_time': vm['run_time'] * 0.01,
+                'total_time': min(vm['run_time'] * 0.01, 5),
                 'pm': -1
             },
             'run': {
@@ -430,13 +430,6 @@ def evaluate_piecewise_linear_function(piecewise_function, x_value, migration_ov
     """
     Evaluate a piecewise linear function at a given x_value.
     """
-    for i in range(len(piecewise_function) - 1):
-        x0, y0 = piecewise_function[i]
-        x1, y1 = piecewise_function[i + 1]
-        
-        if x0 <= x_value <= x1:
-            return y0 + (y1 - y0) * (x_value - x0) / (x1 - x0)
-        
     if migration_overhead:
         max_migration_overhead = migration['energy']['cpu_overhead']['source'] + migration['energy']['cpu_overhead']['target'] + migration['energy']['concurrent']
         if x_value <= 1 + max_migration_overhead:
@@ -445,6 +438,14 @@ def evaluate_piecewise_linear_function(piecewise_function, x_value, migration_ov
 
             return y0 + (y1 - y0) * (x_value - x0) / (x1 - x0)
     
+    else:   
+        for i in range(len(piecewise_function) - 1):
+            x0, y0 = piecewise_function[i]
+            x1, y1 = piecewise_function[i + 1]
+        
+            if x0 <= x_value <= x1:
+                return y0 + (y1 - y0) * (x_value - x0) / (x1 - x0)
+        
     raise ValueError(f"x_value {x_value} is out of bounds for the piecewise linear function. Migration Overhead is {migration_overhead}")
 
 def nested_dict():
@@ -463,6 +464,86 @@ def normalize_speed(pms, target_mean=1):
         pm['features']['speed'] *= scaling_factor
 
     return pms
+
+def find_migration_times(active_vms, pm):
+    pm_id = pm['id']
+    
+    # Get remaining times for migrations from pm (source)
+    source_times = [vm['migration']['total_time'] - vm['migration']['current_time'] 
+                    for vm in active_vms if vm['migration']['from_pm'] == pm_id]
+    
+    # Get remaining times for migrations to pm (target)
+    target_times = [vm['migration']['total_time'] - vm['migration']['current_time'] 
+                    for vm in active_vms if vm['migration']['to_pm'] == pm_id]
+    
+    # All unique event times when migrations end
+    event_times = sorted(set(source_times + target_times))
+    
+    # Initialize counts
+    n_source_running = len(source_times)
+    n_target_running = len(target_times)
+    
+    # Create a dictionary of events to track migrations ending
+    events = {}
+    for t in source_times:
+        events.setdefault(t, {'source': 0, 'target': 0})
+        events[t]['source'] += 1
+    for t in target_times:
+        events.setdefault(t, {'source': 0, 'target': 0})
+        events[t]['target'] += 1
+    
+    # Sort the event times
+    sorted_event_times = sorted(events.keys())
+    
+    # Initialize variables
+    intervals = []
+    prev_time = 0
+    
+    # Process each interval between events
+    for t in sorted_event_times:
+        # Duration of the current interval
+        duration = t - prev_time
+        
+        # Record the interval and counts
+        intervals.append((prev_time, t, n_source_running, n_target_running))
+        
+        # Update counts based on events at time t
+        n_source_running -= events[t]['source']
+        n_target_running -= events[t]['target']
+        
+        # Move to the next time
+        prev_time = t
+    
+    # Compute the durations for each condition
+    real_time_only_source = 0
+    real_time_only_target = 0
+    real_time_multiple_source = 0
+    real_time_multiple_target = 0
+    real_time_multiple_source_and_target = 0
+    
+    for start, end, n_source, n_target in intervals:
+        duration = end - start
+        if n_source > 0 and n_target == 0:
+            if n_source == 1:
+                real_time_only_source += duration
+            elif n_source > 1:
+                real_time_multiple_source += duration
+        elif n_source == 0 and n_target > 0:
+            if n_target == 1:
+                real_time_only_target += duration
+            elif n_target > 1:
+                real_time_multiple_target += duration
+        elif n_source > 0 and n_target > 0:
+            real_time_multiple_source_and_target += duration
+        # If both n_source and n_target are zero, do nothing
+    
+    return (
+        real_time_only_source,
+        real_time_only_target,
+        real_time_multiple_source,
+        real_time_multiple_target,
+        real_time_multiple_source_and_target
+    )
 
 def calculate_features(step, start_time_str, time_step):
     start_time = datetime.strptime(start_time_str, '%a %b %d %H:%M:%S %Z %Y')

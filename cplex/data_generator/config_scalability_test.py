@@ -2,12 +2,12 @@ import os
 
 # Configuration for Physical Machines
 pm_config = {
-    'cpu_capacity': [32, 64, 128, 256, 512, 1024, 2048, 4096],      # Available CPU capacities in cores
-    'memory_capacity': [16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192],    # Available memory capacities in GB
-    'speed_range': (1, 1),                         # Speed range for the machines 
-    'time_to_turn_on_range': (30.0, 180.0),            # Time to turn on range in seconds
+    'cpu_capacity': [4, 8, 16, 32, 64, 128, 256],      # Available CPU capacities in cores
+    'memory_capacity': [16, 32, 64, 128, 256, 512],    # Available memory capacities in GB
+    'speed_range': (1.0, 1.0),                         # Speed range for the machines 
+    'time_to_turn_on_range': (0.0, 0.0),            # Time to turn on range in seconds
     'time_to_turn_off_range': (15.0, 90.0),            # Time to turn off range in seconds
-    'state_percentage': 0,                            # Percentage of physical machines that are ON initially
+    'state_percentage': 100,                            # Percentage of physical machines that are ON initially
 }
 
 # Configuration for Virtual Machines

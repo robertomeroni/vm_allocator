@@ -18,7 +18,7 @@ def vm_fits_on_pm(vm, pm):
     if pm['capacity']['cpu'] - (pm['s']['load']['cpu'] * pm['capacity']['cpu'] + vm['requested']['cpu']) >= 0 and \
        pm['capacity']['memory'] - (pm['s']['load']['memory'] * pm['capacity']['memory'] + vm['requested']['memory']) >= 0 and \
        not (pm['s']['state'] == 0 and pm['s']['time_to_turn_off'] > 0):
-        if vm['allocation']['pm'] == -1 and vm['migration']['to_pm'] == -1:
+        if vm['allocation']['pm'] == -1 and vm['migration']['to_pm'] == -1 and vm['run']['pm'] != pm['id']:
             return True 
     return False
 
@@ -173,24 +173,31 @@ def shi_online(vms, pms):
 def guazzone_bfd(active_vms, pms, power_idle):
     allocation = [{'vm_id': vm['id'], 'pm_id': None} for vm in active_vms]
     
-    sorted_pms = sorted(pms, key=lambda pm: (
-        not pm['s']['state'] == 1 and pm['s']['time_to_turn_on'] == 0,  # Powered-on PMs precede powered-off ones (False < True)
-        -(pm['capacity']['cpu'] - pm['s']['load']['cpu'] * pm['capacity']['cpu']),  # Decreasing free CPU capacity
-        power_idle[pm['id']]  # Increasing idle power consumption
-    ))
-
     sorted_vms = sorted(active_vms, key=lambda vm: vm['requested']['cpu'], reverse=True)
     
     for vm in sorted_vms:
+        vm_allocated = False  # Flag to indicate if the VM has been allocated
+        
+        sorted_pms = sorted(pms, key=lambda pm: (
+            not pm['s']['state'] == 1,  # Powered-on PMs precede powered-off ones (False < True)
+            pm['s']['time_to_turn_on'],
+            -(pm['capacity']['cpu'] - pm['s']['load']['cpu'] * pm['capacity']['cpu']),  # Decreasing free CPU capacity
+            power_idle[pm['id']]  # Increasing idle power consumption
+        ))
+
         for pm in sorted_pms:
-            if vm['allocation']['pm'] != -1 or vm['migration']['to_pm'] != -1 or vm['run']['pm'] == pm['id']:
+            if vm['allocation']['pm'] != -1 or vm['migration']['to_pm'] != -1:
                 break
             if vm_fits_on_pm(vm, pm):
                 pm['s']['load']['cpu'] += vm['requested']['cpu'] / pm['capacity']['cpu']
                 pm['s']['load']['memory'] += vm['requested']['memory'] / pm['capacity']['memory']
                 allocation_entry = next((a for a in allocation if a['vm_id'] == vm['id']), None)
                 allocation_entry['pm_id'] = pm['id']
-                break
+                
+                vm_allocated = True  # Set the flag to True
+                break  # Exit inner loop after successfully allocating VM to PM
+        if vm_allocated:
+            break  # Exit outer loop if VM has been allocated
     
     algorithms_reallocate_vms(allocation, active_vms)
     is_on = manage_pms_allocation(pms, allocation)

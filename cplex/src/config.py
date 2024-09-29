@@ -6,30 +6,32 @@ SEED_NUMBER = 1
 PRINT_TO_CONSOLE = True
 SAVE_VM_AND_PM_SETS = False
 SAVE_LOGS = True
-PERFORMANCE_MEASUREMENT = False
+PERFORMANCE_MEASUREMENT = True
 
 # Workload 
 USE_REAL_DATA = True
-USE_WORKLOAD_PREDICTOR = True
+USE_WORKLOAD_PREDICTOR = False
 
 # WORKLOAD_NAME = 'KIT-FH2-2016'
 # WORKLOAD_NAME = 'UniLu-Gaia-2014'
-WORKLOAD_NAME = 'METACENTRUM-2009'
+# WORKLOAD_NAME = 'METACENTRUM-2009'
 # WORKLOAD_NAME = 'PIK-IPLEX-2009'
+# WORKLOAD_NAME = 'LLNL-Thunder-2007'
+WORKLOAD_NAME = 'Intel-NetbatchA-2012'
 
 # Simulation parameters
 STARTING_STEP = 1
-TIME_STEP = 2000  # Time step in seconds
-NUM_TIME_STEPS = 100000  # Number of time steps to simulate
+TIME_STEP = 250  # Time step in seconds
+NUM_TIME_STEPS = 1500 # Number of time steps to simulate
 NEW_VMS_PER_STEP = 2  # Expected number of new VMs to generate at each time step
 
 # Models to use
-MASTER_MODEL = 'main'
+# MASTER_MODEL = 'main'
 # MASTER_MODEL = 'mini'
 # MASTER_MODEL = 'mixed'
 # MASTER_MODEL = 'guazzone'
 # MASTER_MODEL = 'shi'
-# MASTER_MODEL = 'best_fit'
+MASTER_MODEL = 'best_fit'
 
 MAIN_MODEL_PERIOD = 4  # The main model will be run every MAIN_MODEL_PERIOD time steps
 MINI_MODEL_PERIOD = 2  # The mini model will be run every MINI_MODEL_PERIOD time steps (when the main model is not running)
