@@ -90,6 +90,16 @@ tuple Point {
   float y;
 }
 
+tuple CplexParameters {
+  float time_limit;
+  float optimality_gap;
+}
+
+tuple CplexModelParameters {
+  CplexParameters main_model;
+  CplexParameters mini_model;
+}
+
 // Data
 {PhysicalMachine} physical_machines = ...;
 {VirtualMachine} virtual_machines= ...;
@@ -99,6 +109,7 @@ Point power_function[pm in physical_machines][1..nb_points]= ...;
 float main_time_step = ...; // seconds
 float time_window = ...;
 
+// Weights
 ArchitectureFloat price = ...;
 Energy energy = ...;
 float PUE = ...;
@@ -109,7 +120,16 @@ float remaining_allocation_time[vm in virtual_machines] = vm.allocation.total_ti
 float remaining_run_time[vm in virtual_machines] = vm.run.total_time - vm.run.current_time;
 int is_fully_turned_on[pm in physical_machines] = // if is going to be fully turned ON in the next time step (unless it gets turned OFF)
     (pm.s.time_to_turn_on <= main_time_step ? 1 : 0); 
-    
+
+CplexModelParameters params = ...;
+
+// Set parameters
+execute
+{
+  cplex.tilim= params.mini_model.time_limit;
+  cplex.epgap= params.mini_model.optimality_gap;
+} 
+   
 // Energy consumption of each Physical Machine, depending by the load
 float slopeBeforePoint[pm in physical_machines][p in 1..nb_points]=
   (p == 1) ? 0 : (power_function[pm][p].y - power_function[pm][p-1].y)/(power_function[pm][p].x-power_function[pm][p-1].x);

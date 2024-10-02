@@ -90,9 +90,19 @@ tuple Point {
   float y;
 }
 
+tuple CplexParameters {
+  float time_limit;
+  float optimality_gap;
+}
+
+tuple CplexModelParameters {
+  CplexParameters main_model;
+  CplexParameters mini_model;
+}
+
 // Data
 {PhysicalMachine} physical_machines = ...;
-{VirtualMachine} virtual_machines= ...;
+{VirtualMachine} virtual_machines = ...;
 int nb_points = ...;
 Point power_function[pm in physical_machines][1..nb_points]= ...;
 
@@ -140,6 +150,15 @@ PMWeights w_pm[pm in physical_machines] =
   >;
 
 float profit[vm in virtual_machines] = (vm.requested.cpu * price.cpu + vm.requested.memory * price.memory); // Profit per second from running a Virtual Machine
+
+CplexModelParameters params = ...;
+
+// Set parameters
+execute
+{
+  cplex.tilim= params.main_model.time_limit;
+  cplex.epgap= params.main_model.optimality_gap;
+} 
 
 // Decision Variables
 dvar boolean new_allocation[virtual_machines][physical_machines];

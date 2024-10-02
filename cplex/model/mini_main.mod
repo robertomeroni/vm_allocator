@@ -8,7 +8,7 @@ main {
   var physicalMachinesFile = "physical_machines.dat";
   var virtualMachinesFile = "virtual_machines.dat";
   var weightsFile = "weights.dat";
-  var settingsFile="epgap_0.01.ops"
+  var settingsFile="settings.ops"
   
   // Create complete paths by concatenating folder paths and file names
   var modelPath = folderPath + modelFile;
