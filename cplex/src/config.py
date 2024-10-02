@@ -11,30 +11,38 @@ PERFORMANCE_MEASUREMENT = True
 # Workload 
 USE_REAL_DATA = True
 USE_WORKLOAD_PREDICTOR = False
+FILTER = False
 
 # WORKLOAD_NAME = 'KIT-FH2-2016'
-# WORKLOAD_NAME = 'UniLu-Gaia-2014'
+WORKLOAD_NAME = 'UniLu-Gaia-2014'
 # WORKLOAD_NAME = 'METACENTRUM-2009'
 # WORKLOAD_NAME = 'PIK-IPLEX-2009'
 # WORKLOAD_NAME = 'LLNL-Thunder-2007'
-WORKLOAD_NAME = 'Intel-NetbatchA-2012'
+# WORKLOAD_NAME = 'Intel-NetbatchA-2012'
+# WORKLOAD_NAME = 'Azure-2020'
 
 # Simulation parameters
 STARTING_STEP = 1
-TIME_STEP = 250  # Time step in seconds
-NUM_TIME_STEPS = 1500 # Number of time steps to simulate
+TIME_STEP = 100  # Time step in seconds
+NUM_TIME_STEPS = 10 # Number of time steps to simulate
 NEW_VMS_PER_STEP = 2  # Expected number of new VMs to generate at each time step
 
 # Models to use
 # MASTER_MODEL = 'main'
-# MASTER_MODEL = 'mini'
+MASTER_MODEL = 'mini'
 # MASTER_MODEL = 'mixed'
 # MASTER_MODEL = 'guazzone'
 # MASTER_MODEL = 'shi'
-MASTER_MODEL = 'best_fit'
+# MASTER_MODEL = 'best_fit'
 
 MAIN_MODEL_PERIOD = 4  # The main model will be run every MAIN_MODEL_PERIOD time steps
-MINI_MODEL_PERIOD = 2  # The mini model will be run every MINI_MODEL_PERIOD time steps (when the main model is not running)
+MINI_MODEL_PERIOD = 1  # The mini model will be run every MINI_MODEL_PERIOD time steps (when the main model is not running)
+
+# CPLEX parameters
+TIME_LIMIT_MAIN = 600
+OPTIMALITY_GAP_MAIN = 0.01
+TIME_LIMIT_MINI = 60
+OPTIMALITY_GAP_MINI = 0.01
 
 # Paths
 BASE_PATH = ''

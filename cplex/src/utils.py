@@ -8,7 +8,7 @@ import ast
 from collections import defaultdict
 from datetime import datetime, timedelta
 from config import MODEL_INPUT_FOLDER_PATH, POWER_FUNCTION_FILE, WORKLOAD_START_TIMES_FILE
-from weights import main_time_step, time_window, price, migration, pue, energy, w_load_cpu
+from weights import main_time_step, time_window, price, migration, pue, energy, w_load_cpu, cplex_params
 
 def load_json_file(file_path):
     if not os.path.exists(file_path):
@@ -26,7 +26,7 @@ def load_new_vms(vms_trace_file_path):
     # Convert real_vms to the format expected by the simulation
     new_vms = []
     for vm in real_vms:
-        requested_cpu = vm['requested_processors']
+        requested_cpu = int(vm['requested_processors'])
         requested_memory = int(vm['requested_memory'])
         run_total_time = vm['run_time']
         revenue = (requested_cpu * price['cpu'] + requested_memory * price['memory']) * run_total_time
@@ -38,8 +38,8 @@ def load_new_vms(vms_trace_file_path):
         new_vm = {
             'id': vm['job_number'],
             'requested': {
-                'cpu': vm['requested_processors'],
-                'memory': vm['requested_memory'],
+                'cpu': requested_cpu,
+                'memory': requested_memory,
             },
             'allocation': {
                 'current_time': 0.0,
@@ -63,7 +63,9 @@ def load_new_vms(vms_trace_file_path):
         }
         new_vms.append(new_vm)
     
-    return new_vms
+    sorted_vms = sorted(new_vms, key=lambda x: x['arrival_time'])
+    
+    return sorted_vms
 
 def load_virtual_machines(file_path):
     if not os.path.exists(file_path):
@@ -188,6 +190,11 @@ def convert_to_step(actual_datetime, start_time_str, time_step):
 
 def load_configuration(folder_path):
     weights_data = f"""
+params = <
+           <{cplex_params['main_model']['time_limit']}, {cplex_params['main_model']['optimality_gap']}>, 
+           <{cplex_params['mini_model']['time_limit']}, {cplex_params['mini_model']['optimality_gap']}>
+         >;
+
 main_time_step = {main_time_step};
 
 time_window = {time_window};

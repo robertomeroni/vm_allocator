@@ -102,13 +102,17 @@ def update_physical_machines_load(physical_machines, cpu_load, memory_load):
         pm['s']['load']['cpu'] = cpu_load[pm['id']]
         pm['s']['load']['memory'] = memory_load[pm['id']]
 
+def is_fully_on(pm):
+    return pm['s']['state'] == 1 and pm['s']['time_to_turn_on'] == 0
+
+def get_non_allocated_vms(active_vms):
+    return [vm for vm in active_vms if vm['allocation']['pm'] == -1 and vm['run']['pm'] == -1 and vm['migration']['from_pm'] == -1 and vm['migration']['to_pm'] == -1]
+
 def fill_other_pms(physical_machines, pm):
     for p in physical_machines:
         if p != pm:
             p['s']['load']['cpu'] = 1
             p['s']['load']['memory'] = 1
-
-
 
 def schedule_migration(physical_machines, active_vms, pm, step, vms_to_allocate, scheduled_vms, time_step):
     migrating_vms = [vm for vm in active_vms if vm['migration']['from_pm'] == pm['id']]

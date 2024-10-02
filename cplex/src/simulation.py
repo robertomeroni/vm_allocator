@@ -65,6 +65,7 @@ SAVE_VM_AND_PM_SETS = getattr(config, 'SAVE_VM_AND_PM_SETS', None)
 MAIN_MODEL_PERIOD = getattr(config, 'MAIN_MODEL_PERIOD', None)
 MINI_MODEL_PERIOD = getattr(config, 'MINI_MODEL_PERIOD', None)
 MASTER_MODEL = getattr(config, 'MASTER_MODEL', None)
+FILTER = getattr(config, 'FILTER', None)
 
 # Set VMS_TRACE_FILE if --trace argument is provided
 VMS_TRACE_FILE = args.trace if args.trace else getattr(config, 'VMS_TRACE_FILE', None)
@@ -74,11 +75,12 @@ if VMS_TRACE_FILE and not os.path.isabs(VMS_TRACE_FILE) and not os.path.exists(V
 from logs import log_initial_physical_machines, log_allocation, log_final_net_profit
 from vm_generator import generate_new_vms
 from utils import load_virtual_machines, load_physical_machines, get_start_time, get_first_vm_arrival_time, get_last_vm_arrival_time, load_configuration, save_power_function, save_vm_sets, save_pm_sets, save_model_input_format, parse_opl_output, parse_power_function, evaluate_piecewise_linear_function, calculate_load, clean_up_model_input_files, load_new_vms, check_overload, check_migration_overload, check_unique_state, check_zero_load, check_migration_correctness, find_migration_times
-from allocation import run_opl_model, reallocate_vms, update_physical_machines_state, detect_overload, update_physical_machines_load, deallocate_vms
+from allocation import run_opl_model, reallocate_vms, update_physical_machines_state, detect_overload, get_non_allocated_vms, is_fully_on, update_physical_machines_load, deallocate_vms
 from mini import save_mini_model_input_format, run_mini_opl_model, parse_mini_opl_output, mini_reallocate_vms
-from algorithms import best_fit, guazzone_bfd, shi_migration, shi_online
+from algorithms import best_fit, guazzone_bfd, shi_allocation, shi_migration
 from scaling_manager import launch_scaling_manager
 from workload_predictor import track_arrivals
+from filter import filter_full_physical_machines
 from weights import w_load_cpu, energy, pue, migration
 
 # Check if NO_COLOR environment variable is set
@@ -99,7 +101,7 @@ os.makedirs(MODEL_INPUT_FOLDER_PATH, exist_ok=True)
 os.makedirs(MODEL_OUTPUT_FOLDER_PATH, exist_ok=True)
 
 
-def execute_time_step(active_vms, terminated_vms, scheduled_vms, physical_machines):
+def execute_time_step(active_vms, terminated_vms_in_step, terminated_vms, scheduled_vms, physical_machines):
     num_completed_migrations = 0
     pms_extra_time = {}
     vms_extra_time = {}
@@ -159,6 +161,7 @@ def execute_time_step(active_vms, terminated_vms, scheduled_vms, physical_machin
                     vm['run']['current_time'] += TIME_STEP * pm_speed
             if vm['run']['current_time'] >= vm['run']['total_time']:
                 active_vms.remove(vm)
+                terminated_vms_in_step.append(vm)
                 terminated_vms.append(vm)
 
     for vm_id in scheduled_vms:  
@@ -319,11 +322,15 @@ def simulate_time_steps(initial_vms, initial_pms, num_steps, new_vms_per_step, l
 
     old_active_vms = []
     terminated_vms = []
+    terminated_vms_in_step = []
     physical_machines = deepcopy(initial_pms)
     initial_physical_machines = deepcopy(initial_pms)
     num_completed_migrations = 0
     num_removed_vms = 0
     max_percentage_of_pms_on = 0
+    total_cpu_load = 0.0
+    total_memory_load = 0.0
+    total_fully_on_pm = 0.0
     total_costs = 0.0
     total_pm_energy_consumption = 0.0
     total_migration_energy_consumption = 0.0
@@ -342,13 +349,15 @@ def simulate_time_steps(initial_vms, initial_pms, num_steps, new_vms_per_step, l
             writer = csv.writer(f)
             writer.writerow(["Step", "Model", "Time"])
 
+    print(f"Initialization done")
     for step in range(starting_step, starting_step + num_steps + 1):
         removed_vms = []
         turned_on_pms = []
         turned_off_pms = []
         scheduled_vms = {}
 
-        is_new_vms = False
+        use_scaling_manager = False
+        is_new_vms_arrival = False
         is_on = [pm['s']['state'] for pm in physical_machines]
 
         # Get idle power for each physical machine
@@ -356,26 +365,33 @@ def simulate_time_steps(initial_vms, initial_pms, num_steps, new_vms_per_step, l
         nb_points, power_function = parse_power_function(POWER_FUNCTION_FILE, pm_ids)
         idle_power = [evaluate_piecewise_linear_function(power_function[pm['id']], 0) for pm in physical_machines]
 
-        for vm in active_vms:
-            scheduled_vms[vm['id']] = []
-
         if USE_REAL_DATA:
             vms_in_step = []
+            print("Checking new arrived VMs...")
+            
             for vm in virtual_machines_schedule:
                 if vm['arrival_time'] <= step * TIME_STEP and vm['arrival_time'] >= STARTING_STEP * TIME_STEP:
                     active_vms.append(vm)
                     vms_in_step.append(vm)
                     virtual_machines_schedule.remove(vm)
+                elif vm['arrival_time'] > step * TIME_STEP:
+                    break
 
             track_arrivals(WORKLOAD_NAME, step, TIME_STEP, vms_in_step)
-            if vms_in_step:
-                is_new_vms = True
+            if len(vms_in_step) > 0:
+                is_new_vms_arrival = True
             
             predictions = defaultdict(lambda: defaultdict(dict))
         else:
             # Generate new VMs randomly
             generate_new_vms(active_vms, new_vms_per_step, existing_ids)
         
+
+        for vm in active_vms:
+            scheduled_vms[vm['id']] = []
+
+        is_state_changed = is_new_vms_arrival or is_vms_terminated or is_pms_turned_on
+
         # Determine which model to run
         if MASTER_MODEL:
             model_to_run = MASTER_MODEL
@@ -387,11 +403,22 @@ def simulate_time_steps(initial_vms, initial_pms, num_steps, new_vms_per_step, l
         else:
             model_to_run = 'none'
 
+        # Don't run the model if the state of the system hasn't changed
+        if MASTER_MODEL == 'main' or MASTER_MODEL == 'mini' or MASTER_MODEL == 'mixed':
+            use_scaling_manager = True
+
+            if not is_state_changed:
+                model_to_run = 'none'
+
         if model_to_run == 'main':
             # Deallocate VMs assigned to turning on physical machines, so that they can be reallocated by the models
             deallocate_vms(active_vms)
             
             physical_machines_on = [pm for pm in physical_machines if pm['s']['state'] == 1 and pm['s']['time_to_turn_on'] <= TIME_STEP]
+
+            if FILTER:
+                # Don't pass full physical machines to the model
+                physical_machines_on = filter_full_physical_machines(physical_machines_on)
 
             # Convert into model input format
             vm_model_input_file_path, pm_model_input_file_path = save_model_input_format(active_vms, physical_machines_on, step, MODEL_INPUT_FOLDER_PATH)
@@ -432,12 +459,14 @@ def simulate_time_steps(initial_vms, initial_pms, num_steps, new_vms_per_step, l
             update_physical_machines_load(physical_machines, cpu_load, memory_load)
 
         elif model_to_run == 'mini':
+            print("Filtering VMs...")
             # Deallocate VMs assigned to turning on physical machines, so that they can be reallocated by the models
             deallocate_vms(active_vms)
-            
+            non_allocated_vms = get_non_allocated_vms(active_vms)
+
             physical_machines_on_and_not_full = []
-            non_allocated_vms = [vm for vm in active_vms if (vm['allocation']['pm'] == -1 and vm['run']['pm'] == -1 and vm['migration']['from_pm'] == -1 and vm['migration']['to_pm'] == -1)]
             
+
             if non_allocated_vms:   
                 min_vm_requested_cpu = min([vm['requested']['cpu'] for vm in non_allocated_vms])
                 min_vm_requested_memory = min([vm['requested']['memory'] for vm in non_allocated_vms])
@@ -492,28 +521,35 @@ def simulate_time_steps(initial_vms, initial_pms, num_steps, new_vms_per_step, l
         elif model_to_run == 'shi':
             # Deallocate VMs assigned to turning on physical machines, so that they can be reallocated by the models
             deallocate_vms(active_vms)
+            non_allocated_vms = get_non_allocated_vms(active_vms)
 
-            non_allocated_vms = [vm for vm in active_vms if (vm['allocation']['pm'] == -1 and vm['run']['pm'] == -1 and vm['migration']['from_pm'] == -1 and vm['migration']['to_pm'] == -1)]
-            
             # Run SHI algorithm
             print(color_text(f"\nRunning SHI algorithm for time step {step}...", Fore.YELLOW))
-            is_on = shi_online(non_allocated_vms, physical_machines)
+            is_on = shi_allocation(non_allocated_vms, physical_machines)
             is_on = shi_migration(active_vms, physical_machines)
+
         elif model_to_run == 'none':
             print(color_text(f"\nNo model to run for time step {step}...", Fore.YELLOW))
 
         # Calculate and update load
         cpu_load, memory_load = calculate_load(physical_machines, active_vms, TIME_STEP)
         update_physical_machines_load(physical_machines, cpu_load, memory_load)
+        total_cpu_load += sum(cpu_load)
+        total_memory_load += sum(memory_load)
+        total_fully_on_pm += sum(is_fully_on(pm) for pm in physical_machines)
 
         # Sanity checks
+        print("Checking everything is ok...")
         check_migration_correctness(active_vms)
         check_unique_state(active_vms)
         check_zero_load(active_vms, physical_machines)
         check_overload(active_vms, physical_machines, TIME_STEP)
 
-        if model_to_run == 'main' or model_to_run == 'mini':
-            is_on = launch_scaling_manager(active_vms, physical_machines, idle_power, step, start_time_str, predictions, USE_WORKLOAD_PREDICTOR, WORKLOAD_PREDICTION_MODEL, WORKLOAD_PREDICTION_FILE, TIME_STEP)
+        non_allocated_vms = get_non_allocated_vms(active_vms)
+
+        if use_scaling_manager:
+            print("Launching scaling manager...")
+            is_on = launch_scaling_manager(active_vms, non_allocated_vms, physical_machines, idle_power, step, start_time_str, predictions, USE_WORKLOAD_PREDICTOR, WORKLOAD_PREDICTION_MODEL, WORKLOAD_PREDICTION_FILE, TIME_STEP)
 
         max_percentage_of_pms_on = max(max_percentage_of_pms_on, sum(is_on) / len(physical_machines))
         turned_on_pms, turned_off_pms = update_physical_machines_state(physical_machines, initial_physical_machines, is_on)
@@ -525,6 +561,7 @@ def simulate_time_steps(initial_vms, initial_pms, num_steps, new_vms_per_step, l
         num_removed_vms += len(removed_vms)
 
         # Calculate costs and revenue
+        print("Calculating costs and revenue...")
         step_total_costs, pm_energy_consumption, migration_energy_consumption = calculate_total_costs(active_vms, physical_machines, cpu_load, memory_load)
         total_revenue = calculate_total_revenue(terminated_vms)
         total_costs += step_total_costs
@@ -532,20 +569,29 @@ def simulate_time_steps(initial_vms, initial_pms, num_steps, new_vms_per_step, l
         total_migration_energy_consumption += migration_energy_consumption
         
         # Log current allocation and physical machine load
-        log_allocation(step, active_vms, old_active_vms, terminated_vms, removed_vms, turned_on_pms, turned_off_pms, physical_machines, cpu_load, memory_load, total_revenue, total_costs, log_folder_path)
+        print("Logging useful information...")
+        log_allocation(step, active_vms, old_active_vms, terminated_vms_in_step, removed_vms, turned_on_pms, turned_off_pms, physical_machines, cpu_load, memory_load, total_revenue, total_costs, log_folder_path)
         old_active_vms = deepcopy(active_vms)
+        terminated_vms_in_step = []
 
         is_vms_terminated = False
-        num_terminated_vms = len(terminated_vms)
+        is_pms_turned_on = False
 
         # Execute time step
-        num_completed_migrations_in_step = execute_time_step(active_vms, terminated_vms, scheduled_vms, physical_machines)
-        num_completed_migrations += num_completed_migrations_in_step
+        print("Executing time step...")
+        num_completed_migrations_in_step = execute_time_step(active_vms, terminated_vms_in_step, terminated_vms, scheduled_vms, physical_machines)
         
-        if len(terminated_vms) > num_terminated_vms:
+        num_completed_migrations += num_completed_migrations_in_step
+        pms_turn_on = [pm_id for pm_id in turned_on_pms if physical_machines[pm_id]['s']['time_to_turn_on'] <= TIME_STEP] 
+        
+        if terminated_vms_in_step:
             is_vms_terminated = True
+        
+        if len(pms_turn_on) > 0:
+            is_pms_turned_on = True
 
         # Calculate and update load
+        print("Calculating and updating physical machines load...")
         cpu_load, memory_load = calculate_load(physical_machines, active_vms, TIME_STEP)
         update_physical_machines_load(physical_machines, cpu_load, memory_load)
 
@@ -553,7 +599,7 @@ def simulate_time_steps(initial_vms, initial_pms, num_steps, new_vms_per_step, l
             if len(active_vms) == 0:
                 break
 
-    return total_revenue, total_costs, total_pm_energy_consumption, total_migration_energy_consumption, num_completed_migrations, num_removed_vms, max_percentage_of_pms_on, step
+    return total_revenue, total_costs, total_pm_energy_consumption, total_migration_energy_consumption, num_completed_migrations, num_removed_vms, max_percentage_of_pms_on, total_cpu_load, total_memory_load, total_fully_on_pm, step - starting_step
 
 
 if __name__ == "__main__":
@@ -569,8 +615,8 @@ if __name__ == "__main__":
         start_time_str = get_start_time(WORKLOAD_NAME)
     load_configuration(MODEL_INPUT_FOLDER_PATH)
     save_power_function(os.path.expanduser(INITIAL_PMS_FILE), MODEL_INPUT_FOLDER_PATH)
-    total_revenue, total_costs, total_pm_energy_cost, total_migration_energy_cost, num_completed_migrations, num_removed_vms, max_percentage_of_pms_on, final_step = simulate_time_steps(initial_vms, initial_pms, NUM_TIME_STEPS, NEW_VMS_PER_STEP, log_folder_path)
-    log_final_net_profit(total_revenue, total_costs, total_pm_energy_cost, total_migration_energy_cost, num_completed_migrations, num_removed_vms, max_percentage_of_pms_on, log_folder_path, MASTER_MODEL, USE_RANDOM_SEED, SEED_NUMBER, TIME_STEP, final_step, USE_REAL_DATA, WORKLOAD_NAME)
+    total_revenue, total_costs, total_pm_energy_cost, total_migration_energy_cost, num_completed_migrations, num_removed_vms, max_percentage_of_pms_on, total_cpu_load, total_memory_load, total_fully_on_pm, num_steps = simulate_time_steps(initial_vms, initial_pms, NUM_TIME_STEPS, NEW_VMS_PER_STEP, log_folder_path)
+    log_final_net_profit(total_revenue, total_costs, total_pm_energy_cost, total_migration_energy_cost, num_completed_migrations, num_removed_vms, max_percentage_of_pms_on, total_cpu_load, total_memory_load, total_fully_on_pm, len(initial_pms), log_folder_path, MASTER_MODEL, USE_RANDOM_SEED, SEED_NUMBER, TIME_STEP, num_steps, USE_REAL_DATA, WORKLOAD_NAME)
     clean_up_model_input_files()
 
     if PERFORMANCE_MEASUREMENT:
@@ -582,8 +628,4 @@ if __name__ == "__main__":
             writer.writerow(["Total Execution Time", total_execution_time])  # Log the total execution time
         print(f"Total execution time: {total_execution_time} seconds")
 
-    print(f"Total PM Energy Cost: {total_pm_energy_cost}")
-    print(f"Total Migration Energy Cost: {total_migration_energy_cost}")
-    print(f"Completed migrations: {num_completed_migrations}")
-    print(f"Removed VMs: {num_removed_vms}")
-    print(f"Max percentage of PMs on: {max_percentage_of_pms_on}")
+    

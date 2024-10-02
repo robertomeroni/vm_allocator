@@ -1,7 +1,19 @@
-from config import TIME_STEP
+from config import TIME_STEP, TIME_LIMIT_MAIN, OPTIMALITY_GAP_MAIN, TIME_LIMIT_MINI, OPTIMALITY_GAP_MINI
 
 main_time_step = TIME_STEP  # in seconds
 time_window = 20 * TIME_STEP  # in seconds
+
+# CPLEX parameters
+cplex_params = {
+    'main_model': {
+        'time_limit': TIME_LIMIT_MAIN,
+        'optimality_gap': OPTIMALITY_GAP_MAIN
+    },
+    'mini_model': {
+        'time_limit': TIME_LIMIT_MINI,
+        'optimality_gap': OPTIMALITY_GAP_MINI
+    }
+}
 
 # Conversion factors
 hr_to_s = 3.6 * 10**3  # hours to seconds
