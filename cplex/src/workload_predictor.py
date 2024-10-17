@@ -49,7 +49,7 @@ def preprocess_workload_trace(time_step, arrivals_tracking_file=ARRIVALS_TRACKIN
     df['time'] = pd.to_datetime(df['time'])
     df.set_index('time', inplace=True)
 
-    # Ensure TIME_STEP is a valid frequency string
+    # Ensure time_step is a valid frequency string
     if isinstance(time_step, int):
         time_step_str = f'{time_step}s'  # Convert to seconds if time_step is an integer
     else:

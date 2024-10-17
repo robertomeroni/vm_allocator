@@ -1,7 +1,7 @@
 main {
   // Define folder paths
   var folderPath = "model/";
-  var inputFolderPath = "simulation/model_input/";
+  var inputFolderPath = "simulation/model_input_mini/";
 
   // Define file names
   var modelFile = "vm_allocation_mini.mod";

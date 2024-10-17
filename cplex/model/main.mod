@@ -1,7 +1,7 @@
 main {
   // Define folder paths
   var folderPath = "model/";
-  var inputFolderPath = "simulation/model_input/";
+  var inputFolderPath = "simulation/model_input_main/";
 
   // Define file names
   var modelFile = "vm_allocation.mod";
@@ -73,6 +73,7 @@ main {
     }
 	write(" ]\n");
 	
+	write("")
   } else {
     writeln("No solution");
   }

@@ -92,7 +92,8 @@ tuple Point {
 
 tuple CplexParameters {
   float time_limit;
-  float optimality_gap;
+  float relative_optimality_gap;
+  float absolute_optimality_gap;
 }
 
 tuple CplexModelParameters {
@@ -114,6 +115,8 @@ ArchitectureFloat price = ...;
 Energy energy = ...;
 float PUE = ...;
 MigrationWeights migration = ...;
+float migration_penalty = ...;
+float w_concurrent_migrations = ...;
 float w_load_cpu = ...;
 
 float remaining_allocation_time[vm in virtual_machines] = vm.allocation.total_time - vm.allocation.current_time;
@@ -127,7 +130,8 @@ CplexModelParameters params = ...;
 execute
 {
   cplex.tilim= params.mini_model.time_limit;
-  cplex.epgap= params.mini_model.optimality_gap;
+  cplex.epgap= params.mini_model.relative_optimality_gap;
+  cplex.epagap= params.mini_model.absolute_optimality_gap;
 } 
    
 // Energy consumption of each Physical Machine, depending by the load
@@ -148,7 +152,8 @@ dexpr float additional_energy[pm in physical_machines] =
   
 float profit[vm in virtual_machines] = (vm.requested.cpu * price.cpu + vm.requested.memory * price.memory);                   
 
-maximize   sum(pm in physical_machines) ( 
+// net profit per 1000 seconds
+maximize   1000*sum(pm in physical_machines) ( 
 	         - PUE * energy.cost * (is_on[pm] * static_energy[pm] + additional_energy[pm])
 		     + sum (vm in virtual_machines) ( 
         		   allocation[vm][pm] * profit[vm] * vm.run.total_time / ((remaining_allocation_time[vm] + remaining_run_time[vm]) / pm.features.speed) // allocation case

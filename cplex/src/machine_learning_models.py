@@ -86,11 +86,11 @@ def arima_model(y_train, y_test):
     memory_test = y_test['workload_memory']
 
     # Fit ARIMA model on cpu_train
-    cpu_model = pm.ARIMA(order=(3,0,3), seasonal_order=(1,1,1,24))
+    cpu_model = pm.ARIMA(order=(2,1,3), seasonal_order=(1,1,1,24))
     cpu_results = cpu_model.fit(cpu_train)
 
     # Fit ARIMA model on memory_train
-    memory_model = pm.ARIMA(order=(3,0,3), seasonal_order=(1,1,1,24))
+    memory_model = pm.ARIMA(order=(2,1,3), seasonal_order=(1,1,1,24))
     memory_results = memory_model.fit(memory_train)
 
     # Ensure the directory exists
@@ -462,7 +462,7 @@ if __name__ == "__main__":
     best_params = load_best_params(WORKLOAD_PREDICTOR_FOLDER_PATH)
     
     # Run models
-    print("Running ARIMA model...")
+    # print("Running ARIMA model...")
     # predictions_arima, actual_arima = arima_model(y_train, y_test)
     print("Running Random Forest model...")
     predictions_rf, actual_rf = random_forest_model(X_train, y_train, X_test, y_test, best_params)

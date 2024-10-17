@@ -2,10 +2,13 @@ import numpy as np
 import os
 import sys
 import argparse
-from config import (
-# from config_speed1_on import (
-# from config_speed1_off_big import (
+# from config import (
 # from config_scalability_test import (
+# from config_azure import (
+# from config_tudelft import (
+from config_chameleon_legacy_11_119 import (
+# from config_chameleon_new_85 import (
+# from config_intel_pik_llnl_meta2013 import (
     data_folder_path, pm_cpu_capacity, pm_memory_capacity, pm_speed_range, pm_time_to_turn_on_range, pm_time_to_turn_off_range,
     vm_requested_cpu, vm_requested_memory, execution_time_range, allocation_time_range, default_num_physical_machines, 
     default_num_virtual_machines, state_percentage, running_percentage, migration_time_memory_dirty_rate, migration_time_network_bandwidth, migration_time_resume_vm_on_target

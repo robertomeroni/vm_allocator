@@ -7,11 +7,13 @@ time_window = 20 * TIME_STEP  # in seconds
 cplex_params = {
     'main_model': {
         'time_limit': TIME_LIMIT_MAIN,
-        'optimality_gap': OPTIMALITY_GAP_MAIN
+        'relative_optimality_gap': OPTIMALITY_GAP_MAIN,
+        'absolute_optimality_gap': 10**(-12)
     },
     'mini_model': {
         'time_limit': TIME_LIMIT_MINI,
-        'optimality_gap': OPTIMALITY_GAP_MINI
+        'relative_optimality_gap': OPTIMALITY_GAP_MINI,
+        'absolute_optimality_gap': 10**(-12)
     }
 }
 
@@ -36,7 +38,7 @@ energy = {
 migration = {
     'time': {  # in seconds
         'memory_dirty_rate': 0.1,  # GB of memory that gets dirty per second during live migration
-        'network_bandwidth': 10.0,  # GB/s
+        'network_bandwidth': 1.0,  # GB/s
         'resume_vm_on_target': 20.0 / 10**3,  # in seconds
     },
     'energy': {  
@@ -48,10 +50,11 @@ migration = {
     }
 }
 
-safety_margin = 0.7
-
+w_concurrent_migrations = 0.5
 w_load_cpu = 0.8 # How much the load of the CPU affects the energy consumption (compared to memory)
-expected_runtime_factor = 0.9  # What is the expected real completion time of a task compared to the declared run time: run time / real completion time (allocation time + run time + eventual migration time)
+safety_margin = 0.7
+migration_penalty = 0.1
 
+expected_runtime_factor = 0.9  # What is the expected real completion time of a task compared to the declared run time: run time / real completion time (allocation time + run time + eventual migration time)
 step_window_for_online_prediction = 10
 step_window_for_weights_accuracy = 30

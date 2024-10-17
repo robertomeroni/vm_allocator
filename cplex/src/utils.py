@@ -5,11 +5,17 @@ import os
 import re
 import json
 import ast
-from collections import defaultdict
 from datetime import datetime, timedelta
 from config import MODEL_INPUT_FOLDER_PATH, POWER_FUNCTION_FILE, WORKLOAD_START_TIMES_FILE
-from weights import main_time_step, time_window, price, migration, pue, energy, w_load_cpu, cplex_params
+from weights import main_time_step, time_window, price, migration, pue, energy, w_concurrent_migrations, w_load_cpu, cplex_params, migration_penalty
 
+try:
+    profile # type: ignore
+except NameError:
+    def profile(func):
+        return func
+
+@profile
 def load_json_file(file_path):
     if not os.path.exists(file_path):
         raise ValueError(f"File {file_path} not found.")
@@ -69,7 +75,7 @@ def load_new_vms(vms_trace_file_path):
 
 def load_virtual_machines(file_path):
     if not os.path.exists(file_path):
-        return []
+        return {}
     with open(file_path, 'r') as file:
         data = file.read()
     try:
@@ -77,8 +83,8 @@ def load_virtual_machines(file_path):
     except IndexError:
         print()
         raise ValueError(f"Error in loading virtual machines: Check the format of {file_path}")
-    
-    vms = []
+
+    vms = {}
     for line in vm_lines:
         line = line.strip().strip('<').strip('>')
         parts = [part.strip().strip('<').strip('>') for part in line.split(',')]
@@ -106,13 +112,13 @@ def load_virtual_machines(file_path):
                 'to_pm': int(parts[13])
             },
         }
-        vms.append(vm)
+        vms[vm['id']] = vm  # Store VM in dictionary keyed by ID
     return vms
 
 def load_physical_machines(file_path):
     if not os.path.exists(file_path):
         print(f"File {file_path} not found. Please provide an initial Physical Machines file.")
-        return [], []
+        return {}
 
     with open(file_path, 'r') as file:
         data = file.read()
@@ -123,7 +129,7 @@ def load_physical_machines(file_path):
         print()
         raise ValueError(f"Error in loading physical machines: Check the format of {file_path}")
 
-    pms = []
+    pms = {}
     for line in pm_section:
         line = line.strip().strip('<').strip('>')
         parts = [part.strip().strip('<').strip('>') for part in line.split(',')]
@@ -146,11 +152,12 @@ def load_physical_machines(file_path):
                 'state': int(parts[8])
             }
         }
-        pms.append(pm)
-    
-    normalize_speed(pms)
+        pms[pm['id']] = pm  # Store PM in dictionary keyed by ID
+
+    normalize_speed(pms)  # Ensure this function works with dictionaries
 
     return pms
+
 
 def get_start_time(workload_name):
     with open(WORKLOAD_START_TIMES_FILE, 'r') as file:
@@ -176,12 +183,21 @@ def get_exact_time(start_time_str, step, time_step):
     return start_time + timedelta(seconds=step * time_step)
 
 def get_real_cpu_and_memory(step, start_time_str, aggregated, time_step):
-    for index, row in aggregated.iterrows():
-        index_step = convert_to_step(index, start_time_str, time_step)
-        if index_step == step:
-            return row['cpu'], row['memory']
-    print(f"No real data workload found for step {step}")
-    return None, None
+    # Compute index_step for all indices using vectorized operations
+    index_steps = aggregated.index.map(lambda idx: convert_to_step(idx, start_time_str, time_step))
+    
+    # Create a boolean mask where index_steps match the desired step
+    mask = index_steps == step
+    
+    # Select the rows where the mask is True
+    rows = aggregated.loc[mask]
+    
+    if not rows.empty:
+        # Return the 'cpu' and 'memory' values from the first matching row
+        return rows.iloc[0]['cpu'], rows.iloc[0]['memory']
+    else:
+        print(f"No real data workload found for step {step}")
+        return None, None
 
 def convert_to_step(actual_datetime, start_time_str, time_step):
     start_time = datetime.strptime(start_time_str, '%a %b %d %H:%M:%S %Z %Y')
@@ -191,8 +207,8 @@ def convert_to_step(actual_datetime, start_time_str, time_step):
 def load_configuration(folder_path):
     weights_data = f"""
 params = <
-           <{cplex_params['main_model']['time_limit']}, {cplex_params['main_model']['optimality_gap']}>, 
-           <{cplex_params['mini_model']['time_limit']}, {cplex_params['mini_model']['optimality_gap']}>
+           <{cplex_params['main_model']['time_limit']}, {cplex_params['main_model']['relative_optimality_gap']}, {cplex_params['main_model']['absolute_optimality_gap']}>, 
+           <{cplex_params['mini_model']['time_limit']}, {cplex_params['mini_model']['relative_optimality_gap']}, {cplex_params['mini_model']['absolute_optimality_gap']}>
          >;
 
 main_time_step = {main_time_step};
@@ -213,6 +229,10 @@ migration = <
                {migration['energy']['cpu_overhead']['target']}>,
                {migration['energy']['concurrent']}>
             >;
+
+w_concurrent_migrations = {w_concurrent_migrations};
+
+migration_penalty = {migration_penalty};
 
 w_load_cpu = {w_load_cpu};
 """
@@ -240,7 +260,6 @@ def convert_to_serializable(obj):
     return obj
 
 def save_vm_sets(active_vms, terminated_vms, step, output_folder_path):
-    check_migration_correctness(active_vms)
     active_file_path = os.path.join(output_folder_path, f'active_vms_t{step}.json')
     terminated_file_path = os.path.join(output_folder_path, f'terminated_vms_t{step}.json')
     
@@ -262,7 +281,7 @@ def save_pm_sets(pms, step, output_folder_path):
     with open(file_path, 'w') as file:
         json.dump(pms_serializable, file, indent=4)
 
-def save_power_function(file_path, model_input_folder_path):
+def save_power_function(file_path):
     if not os.path.exists(file_path):
         print(f"File {file_path} not found.")
         return
@@ -283,48 +302,50 @@ def save_power_function(file_path, model_input_folder_path):
         file.write(power_function_section)
         file.write('\n')
 
-def convert_power_function_to_model_input_format(pms):
-    if not os.path.exists(POWER_FUNCTION_FILE):
-        print(f"File {POWER_FUNCTION_FILE} not found.")
-        return
+def parse_power_function(file_path, pm_ids):
+    with open(file_path, 'r') as file:
+        data = file.read()
 
-    # Read the data from the input file
-    with open(POWER_FUNCTION_FILE, 'r') as f:
-        content = f.read()
+    # Extract nb_points
+    nb_points_match = re.search(r'nb_points\s*=\s*(\d+);', data)
+    if nb_points_match:
+        nb_points = int(nb_points_match.group(1))
+    else:
+        raise ValueError("Could not find nb_points in the file.")
 
-    ## Extract 'nb_points' and 'power_function' from the content
-    lines = content.strip().splitlines()
+    # Extract power_function data
+    power_function_match = re.search(r'power_function\s*=\s*\[\s*(.*?)\s*\];', data, re.DOTALL)
+    if power_function_match:
+        power_function_str = power_function_match.group(1)
+    else:
+        raise ValueError("Could not find power_function in the file.")
 
-    # Initialize variables
-    nb_points_line = ''
-    power_function_content = ''
-    inside_power_function = False
+    # Clean and convert the string to a valid Python literal
+    power_function_str_clean = power_function_str.replace('<', '[').replace('>', ']')
+    power_function_str_clean = power_function_str_clean.replace(';', ',').replace('\n', '').replace(' ', '')
 
-    for line in lines:
-        line = line.strip()
-        if line.startswith('nb_points'):
-            nb_points_line = line
-        elif line.startswith('power_function'):
-            inside_power_function = True
-            power_function_content += line + '\n'
-        elif inside_power_function:
-            power_function_content += line + '\n'
-            if '];' in line:
-                inside_power_function = False
+    # Ensure the string is properly enclosed in brackets
+    power_function_str_clean = '[' + power_function_str_clean + ']'
 
-    # Preprocess the power_function content to make it a valid Python expression
-    pf_content = power_function_content.replace('<', '(').replace('>', ')')
-    pf_content = pf_content.replace('power_function = ', '')  # Remove the variable assignment
-    pf_content = pf_content.rstrip(';\n')  # Remove the semicolon and any trailing newline
+    try:
+        # Safely evaluate the string to a Python object
+        power_function_data = ast.literal_eval(power_function_str_clean)
+    except Exception as e:
+        raise ValueError(f"Error parsing power_function data: {e}")
 
-    # Parse the string into a Python data structure
-    data = ast.literal_eval(pf_content)
+    # Map PM IDs to their corresponding power functions
+    piecewise_linear_functions = dict(zip(pm_ids, power_function_data))
 
-    turned_on_pms_rows = [data[pm['id']] for pm in pms]
+    return nb_points, piecewise_linear_functions
 
-    output_content = '\n\n' + nb_points_line + '\n\n'  # Include nb_points in the output
+def convert_power_function_to_model_input_format(pms, power_function_dict, nb_points):
+    # Prepare the output content using the pre-parsed power function
+    turned_on_pms_ids = [pm_id for pm_id in pms if pms[pm_id]['s']['state'] == 1]
+
+    output_content = '\n\nnb_points = ' + str(nb_points) + ';\n\n'
     output_content += 'power_function = [\n'
-    for row in turned_on_pms_rows:
+    for pm_id in turned_on_pms_ids:
+        row = power_function_dict[pm_id]
         row_str = '  [' + ', '.join(f'<{x[0]}, {x[1]}>' for x in row) + '],\n'
         output_content += row_str
     output_content = output_content.rstrip(',\n') + '\n];\n'  # Remove the last comma and newline, close the list
@@ -333,39 +354,44 @@ def convert_power_function_to_model_input_format(pms):
 
 def convert_vms_to_model_input_format(vms):
     formatted_vms = "virtual_machines = {\n"
-    for vm in vms:
+    for vm in vms.values():
         formatted_vms += f"  <{vm['id']}, <{vm['requested']['cpu']}, {vm['requested']['memory']}>, <{vm['allocation']['current_time']}, {vm['allocation']['total_time']}, {vm['allocation']['pm']}>, <{vm['run']['current_time']}, {vm['run']['total_time']}, {vm['run']['pm']}>, <{vm['migration']['current_time']}, {vm['migration']['total_time']}, {vm['migration']['down_time']}, {vm['migration']['from_pm']}, {vm['migration']['to_pm']}>>,\n"
     formatted_vms = formatted_vms.rstrip(",\n") + "\n};"
     return formatted_vms
 
 def convert_pms_to_model_input_format(pms):
     formatted_pms = "physical_machines = {\n"
-    for pm in pms:
+    for pm in pms.values():
         formatted_pms += f"  <{pm['id']}, <{pm['capacity']['cpu']}, {pm['capacity']['memory']}>, <{pm['features']['speed']}>, <{pm['s']['time_to_turn_on']}, {pm['s']['time_to_turn_off']}, <{pm['s']['load']['cpu']}, {pm['s']['load']['memory']}>, {pm['s']['state']}>>, \n"
     formatted_pms = formatted_pms.rstrip(",\n") + "\n};"
     return formatted_pms
 
-def save_model_input_format(vms, pms, step, model_input_folder_path):
-    vm_model_input_file_path = os.path.join(model_input_folder_path, f'virtual_machines_t{step}.dat')
-    pm_model_input_file_path = os.path.join(model_input_folder_path, f'physical_machines_t{step}.dat')
+def save_model_input_format(vms, pms, step, model_input_folder_path, power_function_dict, nb_points):
+    # Ensure the directory exists
+    os.makedirs(model_input_folder_path, exist_ok=True)
     
+    # Construct file paths
+    base_filename = f'_t{step}.dat'
+    vm_filename = 'virtual_machines' + base_filename
+    pm_filename = 'physical_machines' + base_filename
+    vm_model_input_file_path = os.path.join(model_input_folder_path, vm_filename)
+    pm_model_input_file_path = os.path.join(model_input_folder_path, pm_filename)
+    
+    # Convert data to the required format
     formatted_vms = convert_vms_to_model_input_format(vms)
     formatted_pms = convert_pms_to_model_input_format(pms)
-    formatted_power_function = convert_power_function_to_model_input_format(pms)
+    formatted_power_function = convert_power_function_to_model_input_format(pms, power_function_dict, nb_points)
     
-    with open(vm_model_input_file_path, 'w') as file:
-        file.write(formatted_vms)
+    # Write formatted VMs to file
+    with open(vm_model_input_file_path, 'w', encoding='utf-8') as vm_file:
+        vm_file.write(formatted_vms)
     
-    with open(pm_model_input_file_path, 'w') as file:
-        file.write(formatted_pms)
-        file.write(formatted_power_function)
+    # Write formatted PMs and power function to file
+    with open(pm_model_input_file_path, 'w', encoding='utf-8') as pm_file:
+        pm_file.write(formatted_pms)
+        pm_file.write(formatted_power_function)
     
     return vm_model_input_file_path, pm_model_input_file_path
-
-def flatten_is_on(is_on):
-    if isinstance(is_on[0], list):
-        return [state for sublist in is_on for state in sublist]
-    return is_on
 
 def parse_opl_output(output):
     parsed_data = {}
@@ -393,45 +419,44 @@ def parse_opl_output(output):
     
     return parsed_data
 
+def get_opl_return_code(output):
+    pattern = r'main returns\s+([-+]?\d+)'
+
+    # Search for the pattern in the input string
+    match = re.search(pattern, output)
+    
+    if match:
+        return int(match.group(1))
+    else:
+        return None
+    
+def is_opl_output_valid(output, return_code):
+    if return_code != 0:
+        return False
+
+    output_lower = output.lower()
+    time_limit_exceeded_keyword = "time limit exceeded"
+    no_solution_keyword = "no solution"
+    
+    if time_limit_exceeded_keyword in output_lower or no_solution_keyword in output_lower:
+        return False
+    return True
+
 def parse_matrix(matrix_str):
     return [
         [int(num) if num.isdigit() else float(num) for num in row.strip().split()]
         for row in matrix_str.strip().split(']\n             [')
     ]
 
-def parse_power_function(file_path, pm_ids):
-    with open(file_path, 'r') as file:
-        data = file.read()
-
-    nb_points_match = re.search(r'nb_points\s*=\s*(\d+);', data)
-    if nb_points_match:
-        nb_points = int(nb_points_match.group(1))
-    else:
-        print()
-        raise ValueError("Could not find nb_points in the file.")
-
-    power_function_match = re.search(r'power_function\s*=\s*\[\s*(.*?)\s*\];', data, re.DOTALL)
-    if power_function_match:
-        power_function_str = power_function_match.group(1)
-    else:
-        print()
-        raise ValueError("Could not find power_function in the file.")
-
-    piecewise_linear_functions = {}
-    row_pattern = re.compile(r'\[(.*?)\]')
-    
-    for pm_id, row_match in zip(pm_ids, row_pattern.finditer(power_function_str)):
-        row_str = row_match.group(1)
-        row = []
-        pair_pattern = re.compile(r'<\s*([\d\.]+)\s*,\s*([\d\.]+)\s*>')
-        for pair_match in pair_pattern.finditer(row_str):
-            x = float(pair_match.group(1))
-            y = float(pair_match.group(2))
-            row.append((x, y))
-        
-        piecewise_linear_functions[pm_id] = row
-
-    return nb_points, piecewise_linear_functions
+def find_two_largest(times):
+    max_time = second_max_time = 0
+    for time in times:
+        if time > max_time:
+            second_max_time = max_time
+            max_time = time
+        elif time > second_max_time:
+            second_max_time = time
+    return max_time, second_max_time
 
 def evaluate_piecewise_linear_function(piecewise_function, x_value, migration_overhead=False):
     """
@@ -455,19 +480,16 @@ def evaluate_piecewise_linear_function(piecewise_function, x_value, migration_ov
         
     raise ValueError(f"x_value {x_value} is out of bounds for the piecewise linear function. Migration Overhead is {migration_overhead}")
 
-def nested_dict():
-    return defaultdict(lambda: {'cpu': 0, 'memory': 0})
-
 def round_down(value):
     return math.floor(value * 1000000) / 1000000
 
 def normalize_speed(pms, target_mean=1):
-    speeds = [pm['features']['speed'] for pm in pms]
+    speeds = [pm['features']['speed'] for pm in pms.values()]
     current_mean = sum(speeds) / len(speeds)
     scaling_factor = target_mean / current_mean
 
     # Normalize the speeds by multiplying each speed by the scaling factor
-    for pm in pms:
+    for pm in pms.values():
         pm['features']['speed'] *= scaling_factor
 
     return pms
@@ -565,142 +587,150 @@ def calculate_features(step, start_time_str, time_step):
     workload_ts = pd.DataFrame(data, index=[current_time])
     return workload_ts
 
+
 def calculate_load(physical_machines, active_vms, time_step):
-    cpu_load = [0.0] * len(physical_machines)
-    memory_load = [0.0] * len(physical_machines)
+    cpu_load = {pm_id: 0.0 for pm_id in physical_machines.keys()}
+    memory_load = {pm_id: 0.0 for pm_id in physical_machines.keys()}
 
-    for vm in active_vms:
-        pm_id = vm['allocation']['pm'] if vm['allocation']['pm'] != -1 else (vm['migration']['to_pm'] if vm['migration']['to_pm'] != -1 else vm['run']['pm'])
-
-        if pm_id != -1:
-            if physical_machines[pm_id]['s']['state'] == 1 and physical_machines[pm_id]['s']['time_to_turn_on'] < time_step:
-                cpu_load[pm_id] += vm['requested']['cpu'] / physical_machines[pm_id]['capacity']['cpu']
-                memory_load[pm_id] += vm['requested']['memory'] / physical_machines[pm_id]['capacity']['memory']
+    for vm in active_vms.values():
+        pm_id = vm['allocation']['pm'] if vm['allocation']['pm'] != -1 else (
+            vm['migration']['to_pm'] if vm['migration']['to_pm'] != -1 else vm['run']['pm']
+        )
         
+        if pm_id != -1:
+            pm = physical_machines.get(pm_id)
+            if pm and pm['s']['state'] == 1 and pm['s']['time_to_turn_on'] < time_step:
+                cpu_load[pm_id] += vm['requested']['cpu'] / pm['capacity']['cpu']
+                memory_load[pm_id] += vm['requested']['memory'] / pm['capacity']['memory']
+
         if vm['migration']['from_pm'] != -1:
             from_pm_id = vm['migration']['from_pm']
-            
-            cpu_load[from_pm_id] += vm['requested']['cpu'] / physical_machines[from_pm_id]['capacity']['cpu']
-            memory_load[from_pm_id] += vm['requested']['memory'] / physical_machines[from_pm_id]['capacity']['memory']
+            from_pm = physical_machines.get(from_pm_id)
+            if from_pm:
+                cpu_load[from_pm_id] += vm['requested']['cpu'] / from_pm['capacity']['cpu']
+                memory_load[from_pm_id] += vm['requested']['memory'] / from_pm['capacity']['memory']
         
-        cpu_load = [round_down(cpu) for cpu in cpu_load]
-        memory_load = [round_down(memory) for memory in memory_load]
-        
+    for pm_id in cpu_load.keys():
+        if cpu_load[pm_id] > 1:
+            cpu_load[pm_id] = round_down(cpu_load[pm_id])
+        if memory_load[pm_id] > 1:
+            memory_load[pm_id] = round_down(memory_load[pm_id])
+
     return cpu_load, memory_load
 
+def calculate_load_costs(physical_machines, active_vms, time_step):
+    cpu_load_precise = {pm_id: 0.0 for pm_id in physical_machines.keys()}
+    memory_load_precise = {pm_id: 0.0 for pm_id in physical_machines.keys()}
+
+    for vm in active_vms.values():
+        pm_id = vm['allocation']['pm'] if vm['allocation']['pm'] != -1 else (
+            vm['migration']['to_pm'] if vm['migration']['to_pm'] != -1 else vm['run']['pm']
+        )
+        remaining_run_time = vm['allocation']['total_time'] - vm['allocation']['current_time'] + vm['run']['total_time'] - vm['run']['current_time']
+        remaining_migration_time = vm['migration']['total_time'] - vm['migration']['current_time']
+        
+        run_time_weight = remaining_run_time / time_step if remaining_run_time < time_step else 1
+        migration_time_weight = remaining_migration_time / time_step if remaining_migration_time < time_step else 1
+
+        if pm_id != -1:
+            pm = physical_machines.get(pm_id)
+            if pm and pm['s']['state'] == 1 and pm['s']['time_to_turn_on'] < time_step:
+                cpu_load_precise[pm_id] += run_time_weight * vm['requested']['cpu'] / pm['capacity']['cpu']
+                memory_load_precise[pm_id] += run_time_weight * vm['requested']['memory'] / pm['capacity']['memory']
+
+        if vm['migration']['from_pm'] != -1:
+            from_pm_id = vm['migration']['from_pm']
+            from_pm = physical_machines.get(from_pm_id)
+            if from_pm:
+                cpu_load_precise[from_pm_id] += migration_time_weight * vm['requested']['cpu'] / from_pm['capacity']['cpu']
+                memory_load_precise[from_pm_id] += migration_time_weight * vm['requested']['memory'] / from_pm['capacity']['memory']
+        
+    for pm_id in cpu_load_precise.keys():
+        if cpu_load_precise[pm_id] > 1:
+            cpu_load_precise[pm_id] = round_down(cpu_load_precise[pm_id])
+        if memory_load_precise[pm_id] > 1:
+            memory_load_precise[pm_id] = round_down(memory_load_precise[pm_id])
+
+    return cpu_load_precise, memory_load_precise
+
+@profile
 def calculate_future_load(physical_machines, active_vms, actual_time_step, time_window, time_step):
-    # Initialize a list to store the load for each time step
-    future_loads = []
+    import math
 
-    # Iterate through each future time step
-    for future_time_step in range(actual_time_step + 1, actual_time_step + 1 + math.ceil(time_window / time_step)):
-        actual_time_window = (future_time_step - actual_time_step) * time_step
-        # Initialize load lists for this future time step
-        cpu_load = [0.0] * len(physical_machines)
-        memory_load = [0.0] * len(physical_machines)
+    # Precompute future time windows
+    num_steps = math.ceil(time_window / time_step)
+    future_time_windows = [(step * time_step) for step in range(1, num_steps + 1)]
+    num_pms = len(physical_machines)
+    future_loads = [([0.0] * num_pms, [0.0] * num_pms) for _ in future_time_windows]
 
-        # Calculate the load for each VM and PM for the current future time step
-        for vm in active_vms:
-            # Determine the PM for the VM in this time step
-            pm_id = vm['allocation']['pm'] if vm['allocation']['pm'] != -1 else (
-                vm['migration']['to_pm'] if vm['migration']['to_pm'] != -1 else vm['run']['pm']
+    # Precompute data for each VM
+    vm_data_list = []
+    for vm in active_vms.values():
+        # Determine the PM ID for the VM
+        pm_id = vm['allocation']['pm']
+        if pm_id == -1:
+            pm_id = vm['migration']['to_pm']
+            if pm_id == -1:
+                pm_id = vm['run']['pm']
+                if pm_id == -1:
+                    continue  # Skip if PM ID is still -1
+
+        pm = physical_machines[pm_id]
+        pm_state = pm['s']['state']
+        pm_time_to_turn_on = pm['s']['time_to_turn_on']
+        pm_speed = pm['features']['speed']
+        pm_cpu_capacity = pm['capacity']['cpu']
+        pm_memory_capacity = pm['capacity']['memory']
+
+        vm_cpu_load = vm['requested']['cpu'] / pm_cpu_capacity
+        vm_memory_load = vm['requested']['memory'] / pm_memory_capacity
+
+        remaining_time = (
+            pm_time_to_turn_on
+            + (
+                (vm['allocation']['total_time'] - vm['allocation']['current_time'])
+                + (vm['run']['total_time'] - vm['run']['current_time'])
             )
+            / pm_speed
+        )
+        if vm['migration']['to_pm'] != -1:
+            remaining_time += vm['migration']['total_time'] - vm['migration']['current_time']
 
-            # Check if VM is allocated to a physical machine
-            if pm_id != -1:
-                # Check if the physical machine is in an active state and will be turned on before this future time step
-                if physical_machines[pm_id]['s']['state'] == 1 and physical_machines[pm_id]['s']['time_to_turn_on'] < actual_time_window:
-                    remaining_time = physical_machines[pm_id]['s']['time_to_turn_on'] + (vm['allocation']['total_time'] - vm['allocation']['current_time'] + vm['run']['total_time'] - vm['run']['current_time']) / physical_machines[pm_id]['features']['speed']
-                    if vm['migration']['to_pm'] != -1:
-                        remaining_time += vm['migration']['total_time'] - vm['migration']['current_time'] 
-                    if actual_time_window < remaining_time:
-                            cpu_load[pm_id] += vm['requested']['cpu'] / physical_machines[pm_id]['capacity']['cpu']
-                            memory_load[pm_id] += vm['requested']['memory'] / physical_machines[pm_id]['capacity']['memory']
+        from_pm_id = vm['migration']['from_pm']
+        if from_pm_id != -1:
+            from_pm = physical_machines[from_pm_id]
+            from_pm_cpu_load = vm['requested']['cpu'] / from_pm['capacity']['cpu']
+            from_pm_memory_load = vm['requested']['memory'] / from_pm['capacity']['memory']
+        else:
+            from_pm_cpu_load = from_pm_memory_load = 0.0
 
-                # Check if the VM is migrating from a physical machine
-                if vm['migration']['from_pm'] != -1:
-                    from_pm_id = vm['migration']['from_pm']
+        vm_data_list.append({
+            'pm_id': pm_id,
+            'pm_state': pm_state,
+            'pm_time_to_turn_on': pm_time_to_turn_on,
+            'remaining_time': remaining_time,
+            'vm_cpu_load': vm_cpu_load,
+            'vm_memory_load': vm_memory_load,
+            'from_pm_id': from_pm_id,
+            'from_pm_cpu_load': from_pm_cpu_load,
+            'from_pm_memory_load': from_pm_memory_load,
+        })
 
-                    cpu_load[from_pm_id] += vm['requested']['cpu'] / physical_machines[from_pm_id]['capacity']['cpu']
-                    memory_load[from_pm_id] += vm['requested']['memory'] / physical_machines[from_pm_id]['capacity']['memory']
-
-        # Round down the loads for the current future time step
-        cpu_load = [round_down(cpu) for cpu in cpu_load]
-        memory_load = [round_down(memory) for memory in memory_load]
-
-        # Append the loads for this future time step to the list
-        future_loads.append((cpu_load, memory_load))
+    # Compute loads for each future time window
+    for idx, actual_time_window in enumerate(future_time_windows):
+        cpu_load, memory_load = future_loads[idx]
+        for vm_data in vm_data_list:
+            pm_id = vm_data['pm_id']
+            if vm_data['pm_state'] == 1 and vm_data['pm_time_to_turn_on'] < actual_time_window:
+                if actual_time_window < vm_data['remaining_time']:
+                    cpu_load[pm_id] += vm_data['vm_cpu_load']
+                    memory_load[pm_id] += vm_data['vm_memory_load']
+            if vm_data['from_pm_id'] != -1:
+                cpu_load[vm_data['from_pm_id']] += vm_data['from_pm_cpu_load']
+                memory_load[vm_data['from_pm_id']] += vm_data['from_pm_memory_load']
 
     return future_loads
 
-def check_unique_state(vms):
-    for vm in vms:
-        state_count = 0
-        if vm['allocation']['pm'] != -1:
-            state_count += 1
-        if vm['run']['pm'] != -1:
-            state_count += 1
-        if vm['migration']['from_pm'] != -1 or vm['migration']['to_pm'] != -1:
-            state_count += 1
-            if vm['migration']['from_pm'] == -1 or vm['migration']['to_pm'] == -1:
-                print()
-                raise ValueError(f"VM {vm['id']} has an incorrect migration state: {vm['migration']}.")
-        if state_count > 1:
-            print()
-            raise ValueError(f"VM {vm['id']} has multiple states: {vm['allocation']}, {vm['run']}, and {vm['migration']}.")
-
-def check_overload(vms, pms, time_step):
-    # update the load of the PMs
-    cpu_load, memory_load = calculate_load(pms, vms, time_step)
-
-    for pm in pms:
-        if cpu_load[pm['id']] > 1 or memory_load[pm['id']] > 1:
-            effective_cpu_load = 0
-            effective_memory_load = 0
-            for vm in vms:
-                if vm['allocation']['pm'] == pm['id'] or vm['run']['pm'] == pm['id'] or vm['migration']['from_pm'] == pm['id'] or vm['migration']['to_pm'] == pm['id']:
-                    effective_cpu_load += vm['requested']['cpu'] 
-                    effective_memory_load += vm['requested']['memory']
-            if effective_cpu_load > pm['capacity']['cpu'] or effective_memory_load > pm['capacity']['memory']:
-                print()
-                raise ValueError(f"PM {pm['id']} is overloaded: cpu_load {cpu_load[pm['id']]}, memory_load {memory_load[pm['id']]}, effective_cpu_load {effective_cpu_load}, effective_memory_load {effective_memory_load}.")
-
-def check_migration_overload(cpu_migration_overhead, migration_overhead_source, migration_overhead_target, multiple_migrations):
-    max_overhead = 0.0
-
-    if migration_overhead_source and not migration_overhead_target and not multiple_migrations:
-        max_overhead = migration['energy']['cpu_overhead']['source']
-    if not migration_overhead_source and migration_overhead_target and not multiple_migrations:
-        max_overhead = migration['energy']['cpu_overhead']['target']
-    if migration_overhead_source and not migration_overhead_target and multiple_migrations:
-        max_overhead = migration['energy']['cpu_overhead']['source'] + migration['energy']['concurrent']
-    if not migration_overhead_source and migration_overhead_target and multiple_migrations:
-        max_overhead = migration['energy']['cpu_overhead']['target'] + migration['energy']['concurrent']
-    if migration_overhead_source and migration_overhead_target:
-        if not multiple_migrations:
-            raise ValueError("PM is source and target, but Multiple Migration is set to False.")
-        max_overhead = migration['energy']['cpu_overhead']['source'] + migration['energy']['cpu_overhead']['target'] + migration['energy']['concurrent']
-
-    if cpu_migration_overhead > max_overhead:
-        raise ValueError(f"CPU migration overhead {cpu_migration_overhead} exceeds the maximum allowed overhead {max_overhead}.")
-
-def check_migration_correctness(active_vms):
-    for vm in active_vms:
-        if vm['migration']['from_pm'] != -1 and vm['migration']['to_pm'] == -1 or vm['migration']['from_pm'] == -1 and vm['migration']['to_pm'] != -1:
-            print()
-            raise ValueError(f"VM {vm['id']} has an incorrect migration state: {vm['migration']}.")
-        elif vm['migration']['from_pm'] == vm['migration']['to_pm'] and vm['migration']['from_pm'] != -1:
-            print()
-            raise ValueError(f"VM {vm['id']} is migrating to the same PM {vm['migration']['to_pm']}.")
-
-def check_zero_load(vms, pms):
-    for pm in pms:
-        if pm['s']['load']['cpu'] == 0 and pm['s']['load']['memory'] == 0:
-            if pm['s']['state'] == 1 and pm['s']['time_to_turn_on'] == 0:
-                for vm in vms:
-                    if vm['allocation']['pm'] == pm['id'] or vm['run']['pm'] == pm['id'] or vm['migration']['from_pm'] == pm['id'] or vm['migration']['to_pm'] == pm['id']:
-                        print()
-                        raise ValueError(f"VM {vm['id']} is allocated to PM {pm['id']} with zero load: {pm['s']['load']}.")
 
 def clean_up_model_input_files():
     try:
