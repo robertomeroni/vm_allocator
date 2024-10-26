@@ -31,9 +31,8 @@ def run_opl_model(vm_model_input_file_path, pm_model_input_file_path, step, hard
     except subprocess.TimeoutExpired:
         return None
 
-def reallocate_vms(vms, new_allocation, vm_ids, pm_ids, is_allocation, is_migration, is_removal):
+def reallocate_vms(vms, new_allocation, vm_ids, pm_ids, is_allocation, is_migration):
     migrated_vms = []
-    removed_vms = []
 
     # Create a mapping of VM IDs to their previous PM
     vm_migration_from_pm = {}
@@ -72,11 +71,6 @@ def reallocate_vms(vms, new_allocation, vm_ids, pm_ids, is_allocation, is_migrat
                     vm['run']['pm'] = pm_id
                 break  # Allocation found for this VM, move to the next VM
 
-        if is_removal[vm_index] == 1:
-            # Remove VM from vms and add it to removed_vms
-            removed_vm = vms[vm_id]
-            removed_vms.append(removed_vm)
-
     # Reset current times for VMs not allocated or migrating
     for vm in vms.values():
         if vm['migration']['from_pm'] == -1 or vm['migration']['to_pm'] == -1:
@@ -88,8 +82,6 @@ def reallocate_vms(vms, new_allocation, vm_ids, pm_ids, is_allocation, is_migrat
             vm['allocation']['current_time'] = 0.0
             vm['run']['current_time'] = 0.0
             vm['migration']['current_time'] = 0.0
-
-    return removed_vms
 
 def deallocate_vms(active_vms):
     for vm in active_vms.values():

@@ -1,0 +1,7 @@
+<?xml version="1.0"?>
+<settings>
+  <category name="cplex">
+    <setting name="probe" value="1"/>
+    <setting name="cutsfactor" value="30"/>
+  </category>
+</settings>

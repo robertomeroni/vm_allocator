@@ -47,8 +47,8 @@ def scaling_manager(predicted_workload_cpu, predicted_workload_memory, pms, idle
 
     # Sorted PMs
     sorted_pms = sorted(pms.values(), key=lambda pm: pm_sort_key(pm, idle_power[pm['id']]), reverse=True)
-    scale_up_margin_cpu = predicted_workload_cpu * (1 + safety_margin) + non_allocated_workload_cpu
-    scale_up_margin_memory = predicted_workload_memory * (1 + safety_margin) + non_allocated_workload_memory
+    scale_up_margin_cpu = (predicted_workload_cpu + non_allocated_workload_cpu) * safety_margin
+    scale_up_margin_memory = (predicted_workload_memory + non_allocated_workload_memory) * safety_margin
     
     if scale_up_margin_cpu <= 0 and scale_up_margin_memory <= 0:
         for pm_id, pm in pms.items():
@@ -127,7 +127,7 @@ def launch_scaling_manager(active_vms, non_allocated_vms, total_non_allocated_cp
     else:
         time_window = 1
 
-    future_loads = calculate_future_load(physical_machines, active_vms, actual_time_step, time_window, time_step)
+    future_loads = calculate_future_load(physical_machines, active_vms, time_window, time_step)
     
     if use_workload_predictor:
         for step in range(1, max_step + 1):

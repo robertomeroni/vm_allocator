@@ -7,7 +7,7 @@ import json
 import ast
 from datetime import datetime, timedelta
 from config import MODEL_INPUT_FOLDER_PATH, POWER_FUNCTION_FILE, WORKLOAD_START_TIMES_FILE
-from weights import main_time_step, time_window, price, migration, pue, energy, w_concurrent_migrations, w_load_cpu, cplex_params, migration_penalty
+from weights import main_time_step, price, migration, pue, energy, w_concurrent_migrations, w_load_cpu, cplex_params, migration_penalty
 
 try:
     profile # type: ignore
@@ -204,16 +204,14 @@ def convert_to_step(actual_datetime, start_time_str, time_step):
     step = (actual_datetime - start_time).total_seconds() / time_step
     return math.ceil(step)
 
-def load_configuration(folder_path):
+def load_configuration(folder_path, time_step=main_time_step):
     weights_data = f"""
 params = <
            <{cplex_params['main_model']['time_limit']}, {cplex_params['main_model']['relative_optimality_gap']}, {cplex_params['main_model']['absolute_optimality_gap']}>, 
            <{cplex_params['mini_model']['time_limit']}, {cplex_params['mini_model']['relative_optimality_gap']}, {cplex_params['mini_model']['absolute_optimality_gap']}>
          >;
 
-main_time_step = {main_time_step};
-
-time_window = {time_window};
+main_time_step = {time_step};
 
 price = <{price['cpu']}, {price['memory']}>;
 
@@ -404,7 +402,6 @@ def parse_opl_output(output):
         'is_allocation': re.compile(r'is_allocation = \[(.*?)\];', re.DOTALL),
         'is_run': re.compile(r'is_run = \[(.*?)\];', re.DOTALL),
         'is_migration': re.compile(r'is_migration = \[(.*?)\];', re.DOTALL),
-        'is_removal': re.compile(r'is_removal = \[(.*?)\]'),
         'cpu_load': re.compile(r' cpu_load = \[(.*?)\]'),
         'memory_load': re.compile(r' memory_load = \[(.*?)\]'),
     }
@@ -442,6 +439,18 @@ def is_opl_output_valid(output, return_code):
         return False
     return True
 
+def count_non_valid_entries(performance_log_file):
+    non_valid_entries = 0
+    total_entries = 0
+    
+    with open(performance_log_file, 'r') as file:
+        for line in file:
+            total_entries += 1
+            if "not valid" in line:
+                non_valid_entries += 1
+
+    return non_valid_entries, total_entries
+    
 def parse_matrix(matrix_str):
     return [
         [int(num) if num.isdigit() else float(num) for num in row.strip().split()]
@@ -629,6 +638,9 @@ def calculate_load_costs(physical_machines, active_vms, time_step):
         remaining_run_time = vm['allocation']['total_time'] - vm['allocation']['current_time'] + vm['run']['total_time'] - vm['run']['current_time']
         remaining_migration_time = vm['migration']['total_time'] - vm['migration']['current_time']
         
+        if remaining_run_time < 0 or remaining_migration_time < 0:
+            raise ValueError(f"Remaining run time or migration time is negative for VM {vm['id']}")
+        
         run_time_weight = remaining_run_time / time_step if remaining_run_time < time_step else 1
         migration_time_weight = remaining_migration_time / time_step if remaining_migration_time < time_step else 1
 
@@ -645,16 +657,20 @@ def calculate_load_costs(physical_machines, active_vms, time_step):
                 cpu_load_precise[from_pm_id] += migration_time_weight * vm['requested']['cpu'] / from_pm['capacity']['cpu']
                 memory_load_precise[from_pm_id] += migration_time_weight * vm['requested']['memory'] / from_pm['capacity']['memory']
         
-    for pm_id in cpu_load_precise.keys():
+    for pm_id in physical_machines.keys():
         if cpu_load_precise[pm_id] > 1:
             cpu_load_precise[pm_id] = round_down(cpu_load_precise[pm_id])
+        elif cpu_load_precise[pm_id] < 0:
+            raise ValueError(f"CPU load for PM {pm_id} is negative: {cpu_load_precise[pm_id]}")
         if memory_load_precise[pm_id] > 1:
             memory_load_precise[pm_id] = round_down(memory_load_precise[pm_id])
+        elif memory_load_precise[pm_id] < 0:
+            raise ValueError(f"Memory load for PM {pm_id} is negative: {memory_load_precise[pm_id]}")
 
     return cpu_load_precise, memory_load_precise
 
 @profile
-def calculate_future_load(physical_machines, active_vms, actual_time_step, time_window, time_step):
+def calculate_future_load(physical_machines, active_vms, time_window, time_step):
     import math
 
     # Precompute future time windows

@@ -98,7 +98,6 @@ int nb_points = ...;
 Point power_function[pm in physical_machines][1..nb_points]= ...;
 
 float main_time_step = ...; // seconds
-float time_window = ...;
 
 float remaining_allocation_time[vm in virtual_machines] = vm.allocation.total_time - vm.allocation.current_time;
 float remaining_run_time[vm in virtual_machines] = vm.run.total_time - vm.run.current_time;
@@ -165,6 +164,25 @@ dvar float+ max_migration_source[physical_machines];
 dvar float+ max_migration_target[physical_machines];
 dvar float+ max_migration_multiple[physical_machines];
 
+// Set priorities
+execute {
+  for (var vm in virtual_machines)
+    is_allocation[vm].priority = 4;
+    is_run[vm].priority = 5;
+    is_migration[vm].priority = 3;
+
+  for (var vm in virtual_machines)
+	for (var pm in physical_machines)
+      new_allocation[vm][pm].priority = 10;
+
+  for (var pm in physical_machines)
+    has_to_be_on[pm].priority = 0;
+//    is_multiple_migrations[pm].priority = 1;
+    max_migration_source[pm].priority = 0;
+    max_migration_target[pm].priority = 0;
+    max_migration_multiple[pm].priority = 0;
+}
+
 // Expressions
 dexpr float cpu_load[pm in physical_machines] = (1 / pm.capacity.cpu) * sum(vm in virtual_machines) vm.requested.cpu * new_allocation[vm][pm];
 dexpr float memory_load[pm in physical_machines] = (1 / pm.capacity.memory) * sum(vm in virtual_machines) vm.requested.memory * new_allocation[vm][pm]; 
@@ -174,7 +192,6 @@ dexpr float cpu_load_migration[pm in physical_machines] = (1 / pm.capacity.cpu) 
 dexpr float memory_load_migration[pm in physical_machines] = (1 / pm.capacity.memory) * sum(vm in virtual_machines) vm.requested.memory * (new_allocation[vm][pm] + is_migrating_from[vm][pm] - is_allocating_on[vm][pm] * (1 - was_allocating[vm])); 
 
 dexpr int is_added[vm in virtual_machines] = (1 - sum(pm in physical_machines) old_allocation[vm][pm]) * sum(pm in physical_machines) new_allocation[vm][pm];
-dexpr int is_removal[vm in virtual_machines] = sum(pm in physical_machines) old_allocation[vm][pm] * (1 - sum(pm in physical_machines) new_allocation[vm][pm]);
 
 // Model
 // Objective Function: net profit per 1000 seconds
@@ -203,10 +220,7 @@ maximize   (sum(pm in physical_machines) (
 		             / (pm.s.time_to_turn_on + remaining_run_time[vm] / pm.features.speed + vm.migration.down_time)     // effective remaining time
 		       )
 		   )
-		   // removal case
-	     - sum(vm in virtual_machines) 
-		       is_removal[vm] * profit[vm] * vm.run.current_time
-		   ) * 1000;
+		  ) * 1000;
 		       
 			   
 subject to {
@@ -243,10 +257,10 @@ subject to {
     is_migration[vm] <= sum(pm in physical_machines) new_allocation[vm][pm];
     is_allocation[vm] + is_run[vm] + is_migration[vm] <= sum(pm in physical_machines) new_allocation[vm][pm];
   } 
-  // If a Virtual Machine is added or if it was allocating and is not removal, VM state is an allocation
+  // If a Virtual Machine is added or if it was allocating, VM state is an allocation
   forall (vm in virtual_machines) {
 	is_allocation[vm] >= is_added[vm];
-	is_removal[vm] + is_allocation[vm] >= was_allocating[vm];
+	is_allocation[vm] >= was_allocating[vm];
   }
   // A Virtual Machine cannot go from running or migrating state to allocation state 
   forall (vm in virtual_machines) {
@@ -267,11 +281,11 @@ subject to {
   forall (vm in virtual_machines) {
    is_migration[vm] <= is_first_migration[vm] + was_migrating[vm];
   }
-  // Migration (if the allocation is different but the VM is not being added or removed it is a migration)
+  // Migration (if the allocation is different but the VM is not being added it is a migration)
   forall (vm in virtual_machines) {
     forall (pm in physical_machines) {
-      is_added[vm] + is_removal[vm] + old_allocation[vm][pm] + (1 - new_allocation[vm][pm]) + is_migration[vm] >= 1;
-      is_added[vm] + is_removal[vm] + (1 - old_allocation[vm][pm]) + new_allocation[vm][pm] + is_migration[vm] >= 1;
+      is_added[vm] + old_allocation[vm][pm] + (1 - new_allocation[vm][pm]) + is_migration[vm] >= 1;
+      is_added[vm] + (1 - old_allocation[vm][pm]) + new_allocation[vm][pm] + is_migration[vm] >= 1;
     }  
   }
   // If a Virtual Machine is migrating, the new allocation should be different from where it is migrating
@@ -283,7 +297,7 @@ subject to {
   // If a Virtual Machine was migrating, it cannot be considered for reallocation
   forall (vm in virtual_machines) {
     forall (pm in physical_machines) {
-       was_migrating[vm] * old_allocation[vm][pm] <= new_allocation[vm][pm] + is_removal[vm]; 
+       was_migrating[vm] * old_allocation[vm][pm] <= new_allocation[vm][pm]; 
     }
   }    
   // Iff VM is assigned to PM in new_allocation and if it is already allocating or is an allocation, VM is allocating on PM
@@ -352,7 +366,7 @@ subject to {
   }
   // Uniqueness of Virtual Machine state
   forall (vm in virtual_machines) {
-    is_allocation[vm] + is_run[vm] + is_migration[vm] + is_removal[vm] <= 1; 
-    is_allocation[vm] + is_run[vm] + is_migration[vm] + is_removal[vm] >= sum(pm in physical_machines) old_allocation[vm][pm]; 
+    is_allocation[vm] + is_run[vm] + is_migration[vm] <= 1; 
+    is_allocation[vm] + is_run[vm] + is_migration[vm] >= sum(pm in physical_machines) old_allocation[vm][pm]; 
   }
 }

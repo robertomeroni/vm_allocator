@@ -111,6 +111,7 @@ for USE_RANDOM_SEED in "${USE_RANDOM_SEED_VALUES[@]}"; do
                                         fi
 
                                         # Modify the copied config file with the new parameter values
+                                        sed -i "s/^PRINT_TO_CONSOLE = .*/PRINT_TO_CONSOLE = False/" "$TEMP_CONFIG_FILE"
                                         sed -i "s/^USE_RANDOM_SEED = .*/USE_RANDOM_SEED = $USE_RANDOM_SEED/" "$TEMP_CONFIG_FILE"
                                         sed -i "s/^SEED_NUMBER = .*/SEED_NUMBER = $SEED_NUMBER/" "$TEMP_CONFIG_FILE"
                                         sed -i "s/^STARTING_STEP = .*/STARTING_STEP = $STARTING_STEP/" "$TEMP_CONFIG_FILE"
@@ -171,7 +172,6 @@ for USE_RANDOM_SEED in "${USE_RANDOM_SEED_VALUES[@]}"; do
                                         TOTAL_PM_ENERGY_COST=$(grep "Total PM Energy Cost" "$CLEANED_OUTPUT_LOG_FILE" | tail -n 1 | awk -F': ' '{print $2}')
                                         TOTAL_MIGRATION_ENERGY_COST=$(grep "Total Migration Energy Cost" "$CLEANED_OUTPUT_LOG_FILE" | tail -n 1 | awk -F': ' '{print $2}')
                                         COMPLETED_MIGRATIONS=$(grep "Completed migrations" "$CLEANED_OUTPUT_LOG_FILE" | tail -n 1 | awk -F': ' '{print $2}')
-                                        REMOVED_VMS=$(grep "Removed VMs" "$CLEANED_OUTPUT_LOG_FILE" | tail -n 1 | awk -F': ' '{print $2}')
                                         MAX_PERCENTAGE_OF_PMS_ON=$(grep "Max percentage of PMs on" "$CLEANED_OUTPUT_LOG_FILE" | tail -n 1 | awk -F': ' '{print $2}')
                                         AVERAGE_NUMBER_OF_PMS_ON=$(grep "Average number of PMs on" "$CLEANED_OUTPUT_LOG_FILE" | tail -n 1 | awk -F': ' '{print $2}')
                                         AVERAGE_PM_LOADS=$(grep "Average PM loads" "$CLEANED_OUTPUT_LOG_FILE" | tail -n 1 | awk -F': ' '{print $2}')
@@ -189,7 +189,6 @@ for USE_RANDOM_SEED in "${USE_RANDOM_SEED_VALUES[@]}"; do
                                         echo "NUM_TIME_STEPS=$NUM_TIME_STEPS" >> "$RESULTS_FILE"
                                         echo "------------------------------------------" >> "$RESULTS_FILE"
                                         echo "Completed migrations: $COMPLETED_MIGRATIONS" >> "$RESULTS_FILE"
-                                        echo "Removed VMs: $REMOVED_VMS" >> "$RESULTS_FILE"
                                         echo "Max percentage of PMs on: $MAX_PERCENTAGE_OF_PMS_ON" >> "$RESULTS_FILE"
                                         echo "Average number of PMs on: $AVERAGE_NUMBER_OF_PMS_ON" >> "$RESULTS_FILE"
                                         echo "Average PM loads: $AVERAGE_PM_LOADS" >> "$RESULTS_FILE"
@@ -212,7 +211,6 @@ for USE_RANDOM_SEED in "${USE_RANDOM_SEED_VALUES[@]}"; do
                                         echo "NUM_TIME_STEPS=$NUM_TIME_STEPS"
                                         echo "------------------------------------------"
                                         echo "Completed migrations: $COMPLETED_MIGRATIONS"
-                                        echo "Removed VMs: $REMOVED_VMS"
                                         echo "Max percentage of PMs on: $MAX_PERCENTAGE_OF_PMS_ON"
                                         echo "Average number of PMs on: $AVERAGE_NUMBER_OF_PMS_ON"
                                         echo "Average PM loads: $AVERAGE_PM_LOADS"

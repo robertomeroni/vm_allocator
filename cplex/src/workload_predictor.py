@@ -8,43 +8,52 @@ from utils import get_start_time, get_exact_time, calculate_features, get_real_c
 from config import ARRIVALS_TRACKING_FILE
 from weights import step_window_for_online_prediction, step_window_for_weights_accuracy
 
+try:
+    profile # type: ignore
+except NameError:
+    def profile(func):
+        return func
+    
+@profile
 def track_arrivals(workload_name, step, time_step, vms=[]):
     start_time_str = get_start_time(workload_name)
     exact_time = get_exact_time(start_time_str, step, time_step)
     total_cpu = sum(vm['requested']['cpu'] for vm in vms)
     total_memory = sum(vm['requested']['memory'] for vm in vms)
     print(f"Total workload arrived at step {step}: CPU = {total_cpu}, Memory = {total_memory}")
-    arrivals_data = []
-    
-    # Load existing arrivals data if the file exists
-    if os.path.exists(ARRIVALS_TRACKING_FILE):
-        with open(ARRIVALS_TRACKING_FILE, 'r') as file:
-            arrivals_data = json.load(file)
-    
-    # Append the new arrival data for the current time
-    arrivals_data.append({
+
+    arrival_data = {
         'time': exact_time.strftime('%Y-%m-%d %H:%M:%S'),
         'cpu': total_cpu,
         'memory': total_memory
-    })
-    
-    # Save the updated arrivals data back to the file
-    with open(ARRIVALS_TRACKING_FILE, 'w') as file:
-        json.dump(arrivals_data, file, indent=4)
+    }
+
+    # Append the new arrival data to the file
+    with open(ARRIVALS_TRACKING_FILE, 'a') as file:
+        json.dump(arrival_data, file)
+        file.write('\n')
 
 def preprocess_workload_trace(time_step, arrivals_tracking_file=ARRIVALS_TRACKING_FILE):
-    # Load the JSON data
-    with open(arrivals_tracking_file, 'r') as file:
-        data = json.load(file)
-    
     results = []
-    for arrival in data:
-        results.append({
-                'time': arrival['time'],
-                'cpu': arrival['cpu'],
-                'memory': arrival['memory']
-            })
-    # Convert the JSON data to a pandas DataFrame
+    # Check if the file exists
+    if os.path.exists(arrivals_tracking_file):
+        with open(arrivals_tracking_file, 'r') as file:
+            for line in file:
+                # Remove any leading/trailing whitespace
+                line = line.strip()
+                if line:
+                    # Parse each line as a JSON object
+                    arrival = json.loads(line)
+                    results.append({
+                        'time': arrival['time'],
+                        'cpu': arrival['cpu'],
+                        'memory': arrival['memory']
+                    })
+    else:
+        print(f"The file {arrivals_tracking_file} does not exist.")
+        return pd.DataFrame()  # Return an empty DataFrame if the file doesn't exist
+
+    # Convert the list of arrival data to a pandas DataFrame
     df = pd.DataFrame(results)
     df['time'] = pd.to_datetime(df['time'])
     df.set_index('time', inplace=True)
@@ -55,6 +64,7 @@ def preprocess_workload_trace(time_step, arrivals_tracking_file=ARRIVALS_TRACKIN
     else:
         time_step_str = time_step
 
+    # Resample and aggregate the data
     aggregated = df.resample(time_step_str).sum()
     aggregated = aggregated.asfreq(time_step_str, fill_value=0)
     return aggregated

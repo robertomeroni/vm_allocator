@@ -1,7 +1,6 @@
 from config import TIME_STEP, TIME_LIMIT_MAIN, OPTIMALITY_GAP_MAIN, TIME_LIMIT_MINI, OPTIMALITY_GAP_MINI
 
 main_time_step = TIME_STEP  # in seconds
-time_window = 20 * TIME_STEP  # in seconds
 
 # CPLEX parameters
 cplex_params = {
@@ -52,8 +51,8 @@ migration = {
 
 w_concurrent_migrations = 0.5
 w_load_cpu = 0.8 # How much the load of the CPU affects the energy consumption (compared to memory)
-safety_margin = 0.7
-migration_penalty = 0.1
+safety_margin = 1.1
+migration_penalty = 1
 
 expected_runtime_factor = 0.9  # What is the expected real completion time of a task compared to the declared run time: run time / real completion time (allocation time + run time + eventual migration time)
 step_window_for_online_prediction = 10

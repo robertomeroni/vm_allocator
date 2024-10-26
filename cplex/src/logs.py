@@ -3,7 +3,7 @@ import csv
 import json
 import datetime
 from colorama import Fore, Style, init
-from config import SAVE_LOGS, LOGS_FOLDER_PATH, PRINT_TO_CONSOLE
+from config import SAVE_LOGS, LOGS_FOLDER_PATH
 
 try:
     profile # type: ignore
@@ -91,7 +91,7 @@ def log_migrations(active_vms, count_migrations, terminated_vms_in_step, log_fol
                     json.dump(data, file, indent=4)
 
 @profile
-def log_allocation(step, active_vms, old_active_vms, terminated_vms_in_step, removed_vms, turned_on_pms, turned_off_pms, pms, cpu_load, memory_load, total_revenue, total_costs, log_folder_path=None):
+def log_allocation(step, active_vms, old_active_vms, terminated_vms_in_step, turned_on_pms, turned_off_pms, pms, cpu_load, memory_load, total_revenue, total_costs, print_to_console=True, log_folder_path=None):
     log_lines = []
     console_lines = []
 
@@ -223,17 +223,6 @@ def log_allocation(step, active_vms, old_active_vms, terminated_vms_in_step, rem
                 (state_change, Fore.YELLOW if state_change else None, False)
             ])
 
-    # Removed VMs
-    if removed_vms:
-        log_line([("Removed Virtual Machines:", Fore.RED, True)])
-        for vm in removed_vms:
-            log_line([
-                ("  VM ID: ", Fore.YELLOW if state_change else None, True), (f"{vm['id']}", Fore.YELLOW if state_change else None, False),
-                (", CPU: ", Fore.YELLOW if state_change else None, True), (f"{vm['requested']['cpu']}", Fore.YELLOW if state_change else None, False),
-                (", Memory: ", Fore.YELLOW if state_change else None, True), (f"{vm['requested']['memory']}", Fore.YELLOW if state_change else None, False),
-                (", revenue: $", Fore.YELLOW if state_change else None, True), (f"{vm['revenue']:.6f}", Fore.YELLOW if state_change else None, False)
-            ])
-
     # Physical Machines header
     log_line([(f"\n------------------------------------------", Fore.LIGHTRED_EX, True)])
 
@@ -276,10 +265,10 @@ def log_allocation(step, active_vms, old_active_vms, terminated_vms_in_step, rem
             log_file.write('\n'.join(log_lines))
 
     # Print to console (with colors and bold formatting)
-    if PRINT_TO_CONSOLE:
+    if print_to_console:
         print('\n'.join(console_lines))
 
-def log_final_net_profit(total_revenue, total_costs, total_pm_energy_cost, total_migration_energy_cost, num_completed_migrations, num_removed_vms, max_percentage_of_pms_on, total_cpu_load, total_memory_load, total_fully_on_pm, num_pms, log_folder_path, MASTER_MODEL, USE_RANDOM_SEED, SEED_NUMBER, TIME_STEP, num_steps, REAL_DATA, WORKLOAD_NAME):
+def log_final_net_profit(total_revenue, total_costs, total_pm_energy_cost, total_migration_energy_cost, num_completed_migrations, max_percentage_of_pms_on, total_cpu_load, total_memory_load, total_fully_on_pm, num_pms, non_valid_entries, total_entries, log_folder_path, MASTER_MODEL, USE_RANDOM_SEED, SEED_NUMBER, TIME_STEP, num_steps, REAL_DATA, WORKLOAD_NAME):
     net_profit = total_revenue - total_costs
 
     # Determine the color based on whether the net profit is positive or negative
@@ -297,19 +286,25 @@ def log_final_net_profit(total_revenue, total_costs, total_pm_energy_cost, total
     total_pm_energy_cost_message = f"Total PM Energy Cost: ${total_pm_energy_cost:.6f}"
     total_migration_energy_cost_message = f"Total Migration Energy Cost: ${total_migration_energy_cost:.6f}"
     completed_migrations_message = f"Completed migrations: {num_completed_migrations}"
-    removed_vms_message = f"Removed VMs: {num_removed_vms}"
     avg_pms_on_message = f"Average number of PMs on: {avg_pms_on}/{num_pms}"
     max_percentage_of_pms_on_message = f"Max percentage of PMs on: {max_percentage_of_pms_on}%"
     avg_pm_loads_message = f"Average PM loads: CPU {avg_cpu_load:.2f}%, Memory {avg_memory_load:.2f}%"
+    non_valid_entries_message = f"Non-valid entries: {non_valid_entries}/{total_entries} ({(non_valid_entries / total_entries * 100):.2f}%)"
+    time_step_message = f"Time Step: {TIME_STEP}"
+    num_steps_message = f"Number of Time Steps: {num_steps}"
+    total_revenue_message = f"Total Revenue Gained from Completed VMs: ${total_revenue:.6f}"
+    total_costs_message = f"Total Costs Incurred: ${total_costs:.6f}"
     
     print(f"\n{color}{Style.BRIGHT}\033[4m{final_net_profit_message}{Style.RESET_ALL}\n")
+    print(total_revenue_message)
+    print(total_costs_message)
     print(total_pm_energy_cost_message)
     print(total_migration_energy_cost_message)
     print(completed_migrations_message)
-    print(removed_vms_message)
     print(avg_pms_on_message)
     print(max_percentage_of_pms_on_message)
     print(avg_pm_loads_message)
+    print(non_valid_entries_message)
 
     # Save to log file (without colors)
     if SAVE_LOGS:
@@ -327,13 +322,11 @@ def log_final_net_profit(total_revenue, total_costs, total_pm_energy_cost, total
                 seed_message = f"Random Seed Number: {SEED_NUMBER}"
                 log_file.write(seed_message + '\n')
             
-            time_step_message = f"Time Step: {TIME_STEP}"
-            num_steps_message = f"Number of Time Steps: {num_steps}"
-            total_revenue_message = f"Total Revenue Gained from Completed VMs: ${total_revenue:.6f}"
-            total_costs_message = f"Total Costs Incurred: ${total_costs:.6f}"
+            
 
             log_file.write(time_step_message + '\n')
             log_file.write(num_steps_message + '\n')
+            log_file.write(non_valid_entries_message + '\n')
             log_file.write('=============================\n')
             log_file.write(total_revenue_message + '\n')
             log_file.write(total_costs_message + '\n')
@@ -341,7 +334,6 @@ def log_final_net_profit(total_revenue, total_costs, total_pm_energy_cost, total
             log_file.write(total_migration_energy_cost_message + '\n')
             log_file.write('------------------------------------------\n')
             log_file.write(completed_migrations_message + '\n')
-            log_file.write(removed_vms_message + '\n')
             log_file.write(avg_pms_on_message + '\n')
             log_file.write(max_percentage_of_pms_on_message + '\n')
             log_file.write(avg_pm_loads_message + '\n')

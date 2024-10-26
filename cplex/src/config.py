@@ -17,23 +17,23 @@ USE_FILTER = True
 # WORKLOAD_NAME = 'LLNL-Thunder-2007'
 # WORKLOAD_NAME = 'METACENTRUM-2009'
 # WORKLOAD_NAME = 'METACENTRUM-2013'
-WORKLOAD_NAME = 'PIK-IPLEX-2009'
+# WORKLOAD_NAME = 'PIK-IPLEX-2009'
 # WORKLOAD_NAME = 'TU-Delft-2007'
 # WORKLOAD_NAME = 'UniLu-Gaia-2014'
 
-# WORKLOAD_NAME = 'Azure-2020'
+WORKLOAD_NAME = 'Azure-2020'
 # WORKLOAD_NAME = 'Chameleon-Legacy-2020'
 # WORKLOAD_NAME = 'Chameleon-New-2020'
 
 # Simulation parameters
 STARTING_STEP = 1
-TIME_STEP = 500 # Time step in seconds
-NUM_TIME_STEPS = 100 # Number of time steps to simulate
+TIME_STEP = 5 # Time step in seconds
+NUM_TIME_STEPS = 2000 # Number of time steps to simulate
 NEW_VMS_PER_STEP = 2  # Expected number of new VMs to generate at each time step
 
 # Models to use
-# MASTER_MODEL = 'main'
-MASTER_MODEL = 'mini'
+MASTER_MODEL = 'main'
+# MASTER_MODEL = 'mini'
 # MASTER_MODEL = 'hybrid'
 # MASTER_MODEL = 'guazzone'
 # MASTER_MODEL = 'shi'
@@ -45,13 +45,13 @@ MAIN_MODEL_PERIOD = 5  # The main model will be run every MAIN_MODEL_PERIOD time
 MINI_MODEL_PERIOD = 5  # The mini model will be run every MINI_MODEL_PERIOD time steps (when the main model is not running)
 
 # Hard time limits
-HARD_TIME_LIMIT_MAIN = TIME_STEP / 5
+HARD_TIME_LIMIT_MAIN = TIME_STEP / 2
 HARD_TIME_LIMIT_MINI = TIME_STEP / 2
 
 # CPLEX parameters
-TIME_LIMIT_MAIN = 600
-OPTIMALITY_GAP_MAIN = 0.01
-TIME_LIMIT_MINI = 30
+TIME_LIMIT_MAIN = 60000
+OPTIMALITY_GAP_MAIN = 0.05
+TIME_LIMIT_MINI = 3000
 OPTIMALITY_GAP_MINI = 0.01
 
 # Paths
