@@ -1,6 +1,20 @@
+import random
 import heapq
 
 EPSILON = 0.00001
+
+def filter_dict_randomly(dict, n):
+    if n >= len(dict):
+        return dict.copy()
+    else:
+        keys = random.sample(list(dict), n)
+        return {k: dict[k] for k in keys}
+
+def split_dict_randomly(dict, chunk_size):
+    keys = list(dict.keys())
+    random.shuffle(keys)
+    for i in range(0, len(keys), chunk_size):
+        yield {k: dict[k] for k in keys[i:i + chunk_size]}
 
 def filter_full_pms(physical_machines):
     # Create a list of PM IDs to remove
@@ -52,7 +66,6 @@ def filter_fragmented_pms(physical_machines, limit=100):
         for pm_id in list(physical_machines.keys()):
             if pm_id not in keep_ids:
                 del physical_machines[pm_id]
-
 
 def filter_vms_on_pms(vms, physical_machines):
     pm_ids = set(physical_machines.keys())

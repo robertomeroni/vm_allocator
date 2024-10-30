@@ -29,7 +29,7 @@ def log_initial_physical_machines(pms, log_folder_path):
             log_file.write(f"  PM ID: {pm_id}, CPU Capacity: {pm['capacity']['cpu']}, Memory Capacity: {pm['capacity']['memory']}, Speed: {pm['features']['speed']}, Time to Turn On: {pm['s']['time_to_turn_on']}, Time to Turn Off: {pm['s']['time_to_turn_off']}, State: {pm['s']['state']}\n")
     return log_folder_path
 
-def log_performance(step, model, time_taken, valid, performance_log_file):
+def log_performance(step, model, time_taken, valid, num_vms, num_pms, performance_log_file):
     if valid:
         valid = ''
     else:
@@ -37,7 +37,7 @@ def log_performance(step, model, time_taken, valid, performance_log_file):
 
     with open(performance_log_file, "a", newline='') as f:
         writer = csv.writer(f)
-        writer.writerow([step, model, time_taken, valid])
+        writer.writerow([step, model, time_taken, valid, num_vms, num_pms])
 
 def log_migrations(active_vms, count_migrations, terminated_vms_in_step, log_folder_path, step, final_step):
     file_path = os.path.join(log_folder_path, 'count_migrations.json')

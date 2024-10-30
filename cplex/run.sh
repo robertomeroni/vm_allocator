@@ -56,9 +56,9 @@ rm -rf ./simulation/model_input_main        \
        ./simulation/model_output_main       \
        ./simulation/model_input_mini        \
        ./simulation/model_output_mini       \
-       ./simulation/simulation_output       \
-       ./simulation/migration_schedule
-clear
+       ./simulation/pm_manager              \
+       ./simulation/migration_schedule      \
+       ./simulation/simulation_output
 
 # Import the necessary variables from the Python config file
 INITIAL_PMS_FILE=$(python3 -c "

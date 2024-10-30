@@ -2,35 +2,42 @@ import os
 import shutil
 import subprocess
 from copy import deepcopy
-from config import MODEL_INPUT_FOLDER_PATH, MODEL_OUTPUT_FOLDER_PATH, MAIN_MODEL_PATH, MIGRATION_SCHEDULE_FOLDER_PATH
+from config import FLOW_CONTROL_PATH, MIGRATION_SCHEDULE_FOLDER_PATH
 from utils import calculate_load
-from mini import save_mini_model_input_format, run_mini_opl_model, parse_mini_opl_output, mini_reallocate_vms
+from mini import save_mini_model_input_format, parse_mini_opl_output, mini_reallocate_vms
 
-
-def run_opl_model(vm_model_input_file_path, pm_model_input_file_path, step, hard_time_limit_main):
-    # Copy the input files to the required path
-    shutil.copy(vm_model_input_file_path, os.path.join(MODEL_INPUT_FOLDER_PATH, 'virtual_machines.dat'))
-    shutil.copy(pm_model_input_file_path, os.path.join(MODEL_INPUT_FOLDER_PATH, 'physical_machines.dat'))
+def run_opl_model(vm_model_input_file_path, pm_model_input_file_path, model_input_folder_path, model_output_folder_path, step, model_name, hard_time_limit=None):
+    os.makedirs(model_output_folder_path, exist_ok=True)
     
+    # Copy the input files to the required path
+    shutil.copy(vm_model_input_file_path, os.path.join(model_input_folder_path, 'virtual_machines.dat'))
+    shutil.copy(pm_model_input_file_path, os.path.join(model_input_folder_path, 'physical_machines.dat'))
+    
+    cmd = [
+        'oplrun',
+        f'-Dmodel_name={model_name}',
+        os.path.expanduser(FLOW_CONTROL_PATH)
+    ]
+
     try:
         # Run the OPL model with a timeout
         result = subprocess.run(
-            ['oplrun', os.path.expanduser(MAIN_MODEL_PATH)],
+            cmd,
             capture_output=True,
             text=True,
-            timeout=hard_time_limit_main
+            timeout=hard_time_limit
         )
         
         # Save the OPL model output
-        output_file_path = os.path.join(MODEL_OUTPUT_FOLDER_PATH, f'opl_output_t{step}.txt')
+        output_file_path = os.path.join(model_output_folder_path, f'opl_output_t{step}.txt')
         with open(output_file_path, 'w') as file:
             file.write(result.stdout)
         
         return result.stdout
-    
+
     except subprocess.TimeoutExpired:
         return None
-
+    
 def reallocate_vms(vms, new_allocation, vm_ids, pm_ids, is_allocation, is_migration):
     migrated_vms = []
 
@@ -122,7 +129,7 @@ def is_fully_on_next_step(pm, time_step):
 def get_non_allocated_vms(active_vms):
     return {vm['id']: vm for vm in active_vms.values() if vm['allocation']['pm'] == -1 and vm['run']['pm'] == -1 and vm['migration']['from_pm'] == -1 and vm['migration']['to_pm'] == -1}
 
-def get_non_allocated_workload(active_vms):
+def get_non_allocated_workload(active_vms, scheduled_vms):
     non_allocated_vms = {}
     total_non_allocated_cpu = 0
     total_non_allocated_memory = 0
@@ -131,7 +138,8 @@ def get_non_allocated_workload(active_vms):
         if (vm['allocation']['pm'] == -1 and 
             vm['run']['pm'] == -1 and 
             vm['migration']['from_pm'] == -1 and 
-            vm['migration']['to_pm'] == -1):
+            vm['migration']['to_pm'] == -1 and
+            not any(vm['id'] == scheduled_vm['id'] for vm_list in scheduled_vms.values() for scheduled_vm in vm_list)):
             non_allocated_vms[vm['id']] = vm
             total_non_allocated_cpu += vm['requested']['cpu']
             total_non_allocated_memory += vm['requested']['memory']
@@ -147,6 +155,8 @@ def schedule_migration(physical_machines, active_vms, pm, step, vms_to_allocate,
     update_physical_machines_load(pm_dict, cpu_load, memory_load)
 
     for vm in migrating_vms:
+        scheduled_vms[vm['id']] = []
+
         migrating_to_pm = physical_machines[vm['migration']['to_pm']]
         if vms_to_allocate and migrating_to_pm['s']['state'] == 1 and migrating_to_pm['s']['time_to_turn_on'] < time_step and vm['migration']['total_time'] - vm['migration']['current_time'] < time_step:
             filename = f"{step}_pm{pm['id']}_vm{vm['id']}"
@@ -164,7 +174,7 @@ def schedule_migration(physical_machines, active_vms, pm, step, vms_to_allocate,
             mini_vm_model_input_file_path, mini_pm_model_input_file_path = save_mini_model_input_format(vms_to_allocate, physical_machines_schedule, filename, schedule_migration_folder_path, power_function_dict, nb_points)
             
             # Run mini OPL model
-            opl_output = run_mini_opl_model(mini_vm_model_input_file_path, mini_pm_model_input_file_path, schedule_migration_folder_path, filename)
+            opl_output = run_opl_model(mini_vm_model_input_file_path, mini_pm_model_input_file_path, MIGRATION_SCHEDULE_FOLDER_PATH, schedule_migration_folder_path, filename, "overload")
             
             parsed_data = parse_mini_opl_output(opl_output)
             partial_allocation = parsed_data['allocation']
@@ -202,7 +212,7 @@ def solve_overload(pm, physical_machines, active_vms, scheduled_vms, step, time_
     mini_vm_model_input_file_path, mini_pm_model_input_file_path = save_mini_model_input_format(vms_to_allocate, physical_machines_schedule, step, MIGRATION_SCHEDULE_FOLDER_PATH, power_function_dict, nb_points)
     
     # Run mini OPL model
-    opl_output = run_mini_opl_model(mini_vm_model_input_file_path, mini_pm_model_input_file_path, MIGRATION_SCHEDULE_FOLDER_PATH, step)
+    opl_output = run_opl_model(mini_vm_model_input_file_path, mini_pm_model_input_file_path, MIGRATION_SCHEDULE_FOLDER_PATH, MIGRATION_SCHEDULE_FOLDER_PATH, step, "overload")
     
     parsed_data = parse_mini_opl_output(opl_output)
     partial_allocation = parsed_data['allocation']

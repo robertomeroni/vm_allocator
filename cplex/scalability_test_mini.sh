@@ -6,8 +6,8 @@ output_dir="${log_dir}/output"
 results_file="${log_dir}/scalability_test_results.csv"
 
 # Define the ranges for physical and virtual machines
-physical_machines=($(seq 100 200 5000))  # Adjust the range as needed
-virtual_machines=($(seq 10 1 10))  # Adjust the range as needed
+physical_machines=($(seq 50 200 2500))  # Adjust the range as needed
+virtual_machines=($(seq 10 1 200))  # Adjust the range as needed
 
 # Clean logs directory
 rm -rf $log_dir/*

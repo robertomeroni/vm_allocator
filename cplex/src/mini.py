@@ -1,6 +1,6 @@
 import os, shutil, subprocess, re
 from utils import convert_vms_to_model_input_format, convert_pms_to_model_input_format, convert_power_function_to_model_input_format, parse_matrix
-from config import MINI_MODEL_INPUT_FOLDER_PATH, MINI_MODEL_PATH
+from config import MINI_MODEL_INPUT_FOLDER_PATH, FLOW_CONTROL_PATH
 
 try:
     profile # type: ignore
@@ -34,30 +34,6 @@ def save_mini_model_input_format(vms, pms, step, model_input_folder_path, power_
     
     return vm_model_input_file_path, pm_model_input_file_path
 
-def run_mini_opl_model(vm_model_input_file_path, pm_model_input_file_path, model_output_folder_path, step, hard_time_limit_mini=None):
-    # Copy the input files to the required path
-    shutil.copy(vm_model_input_file_path, os.path.join(MINI_MODEL_INPUT_FOLDER_PATH, 'virtual_machines.dat'))
-    shutil.copy(pm_model_input_file_path, os.path.join(MINI_MODEL_INPUT_FOLDER_PATH, 'physical_machines.dat'))
-    
-    try:
-        # Run the OPL model with a timeout
-        result = subprocess.run(
-            ['oplrun', os.path.expanduser(MINI_MODEL_PATH)],
-            capture_output=True,
-            text=True,
-            timeout=hard_time_limit_mini
-        )
-        
-        # Save the OPL model output
-        output_file_path = os.path.join(model_output_folder_path, f'opl_output_t{step}.txt')
-        with open(output_file_path, 'w') as file:
-            file.write(result.stdout)
-        
-        return result.stdout
-
-    except subprocess.TimeoutExpired:
-        return None
-
 def parse_mini_opl_output(output):
     parsed_data = {}
     
@@ -79,14 +55,10 @@ def parse_mini_opl_output(output):
     
     return parsed_data
 
-def mini_reallocate_vms(vm_ids, pm_ids, allocation, active_vms):
+def mini_reallocate_vms(vm_ids, pm_ids, allocation, non_allocated_vms):
     for vm_index, vm_id in enumerate(vm_ids):
-        vm = active_vms.get(vm_id)
-        if vm:
-            vm['allocation']['pm'] = -1
-        else:
-            print(f"VM ID {vm_id} not found in active VMs.")
-            raise ValueError(f"VM ID {vm_id} not found in active VMs.")
+        vm = non_allocated_vms.get(vm_id)
+        vm['allocation']['pm'] = -1
         for pm_index in range(len(pm_ids)):
             if allocation[vm_index][pm_index] == 1:
                 vm['allocation']['pm'] = pm_ids[pm_index]

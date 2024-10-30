@@ -42,43 +42,43 @@ function set_time_parameters() {
   case "$WORKLOAD_NAME" in
     "Azure-2020")
       TIME_STEP=5
-      NUM_TIME_STEPS=10000
+      NUM_TIME_STEPS=500
       ;;
     "Chameleon-Legacy-2020")
       TIME_STEP=5000
-      NUM_TIME_STEPS=70000
+      NUM_TIME_STEPS=7000
       ;;
     "Chameleon-New-2020")
       TIME_STEP=500
-      NUM_TIME_STEPS=500000
+      NUM_TIME_STEPS=5000
       ;;
     "Intel-NetbatchA-2012")
       TIME_STEP=5
-      NUM_TIME_STEPS=700
+      NUM_TIME_STEPS=200
       ;;
     "LLNL-Thunder-2007")
       TIME_STEP=50
-      NUM_TIME_STEPS=5000
+      NUM_TIME_STEPS=1000
       ;;
     "METACENTRUM-2009")
       TIME_STEP=80
-      NUM_TIME_STEPS=15000
+      NUM_TIME_STEPS=3000
       ;;
     "METACENTRUM-2013")
       TIME_STEP=3
-      NUM_TIME_STEPS=10000
+      NUM_TIME_STEPS=1000
       ;;
     "PIK-IPLEX-2009")
       TIME_STEP=20
-      NUM_TIME_STEPS=20000
+      NUM_TIME_STEPS=2000
       ;;
     "TU-Delft-2007")
       TIME_STEP=50
-      NUM_TIME_STEPS=50000
+      NUM_TIME_STEPS=5000
       ;;
     "UniLu-Gaia-2014")
       TIME_STEP=40
-      NUM_TIME_STEPS=30000
+      NUM_TIME_STEPS=3000
       ;;
       
     *)

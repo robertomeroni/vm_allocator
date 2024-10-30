@@ -90,24 +90,11 @@ tuple Point {
   float y;
 }
 
-tuple CplexParameters {
-  float time_limit;
-  float relative_optimality_gap;
-  float absolute_optimality_gap;
-}
-
-tuple CplexModelParameters {
-  CplexParameters main_model;
-  CplexParameters mini_model;
-}
-
 // Data
 {PhysicalMachine} physical_machines = ...;
 {VirtualMachine} virtual_machines= ...;
 int nb_points = ...;
 Point power_function[pm in physical_machines][1..nb_points]= ...;
-
-float main_time_step = ...; // seconds
 
 // Weights
 ArchitectureFloat price = ...;
@@ -118,18 +105,11 @@ float migration_penalty = ...;
 float w_concurrent_migrations = ...;
 float w_load_cpu = ...;
 
-int is_fully_turned_on[pm in physical_machines] = // if is going to be fully turned ON in the next time step (unless it gets turned OFF)
-    (pm.s.time_to_turn_on <= main_time_step ? 1 : 0); 
+float epgap = ...;
 
-CplexModelParameters params = ...;
-
-// Set parameters
-execute
-{
-  cplex.tilim= params.mini_model.time_limit;
-  cplex.epgap= params.mini_model.relative_optimality_gap;
-  cplex.epagap= params.mini_model.absolute_optimality_gap;
-} 
+execute {
+  cplex.epgap = epgap;
+}
 
 // Energy consumption of each Physical Machine, depending by the load
 float slopeBeforePoint[pm in physical_machines][p in 1..nb_points]=
@@ -144,11 +124,10 @@ dvar boolean is_on[physical_machines];
 dexpr float cpu_load[pm in physical_machines] = pm.s.load.cpu + (1 / pm.capacity.cpu) * sum(vm in virtual_machines) vm.requested.cpu * allocation[vm][pm];
 dexpr float memory_load[pm in physical_machines] = pm.s.load.memory + (1 / pm.capacity.memory) * sum(vm in virtual_machines) vm.requested.memory * allocation[vm][pm]; 
 dexpr float additional_energy[pm in physical_machines] = 
-    dynamic_energy[pm](w_load_cpu * cpu_load[pm] + (1 - w_load_cpu) * memory_load[pm]) * is_fully_turned_on[pm]
+    dynamic_energy[pm](w_load_cpu * cpu_load[pm] + (1 - w_load_cpu) * memory_load[pm])
   - dynamic_energy[pm](w_load_cpu * pm.s.load.cpu + (1 - w_load_cpu) * pm.s.load.memory);
   
 float profit[vm in virtual_machines] = (vm.requested.cpu * price.cpu + vm.requested.memory * price.memory);                   
-
 
 // Objective Function: net profit per 1000 seconds
 maximize   1000*sum(pm in physical_machines) ( 
@@ -159,12 +138,6 @@ maximize   1000*sum(pm in physical_machines) (
 		   );
 	   
 subject to {
-  // If Virtual Machine is allocated, the Physical Machine has to be fully ON
-  forall(pm in physical_machines) {
-    forall (vm in virtual_machines) {
-      allocation[vm][pm] <= is_fully_turned_on[pm]; 
-    }
-  }        
   // A Virtual Machine is assigned maximum to one Physical Machine
   forall (vm in virtual_machines) {
     sum (pm in physical_machines) allocation[vm][pm] <= 1;

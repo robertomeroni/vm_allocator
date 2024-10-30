@@ -7,7 +7,7 @@ import json
 import ast
 from datetime import datetime, timedelta
 from config import MODEL_INPUT_FOLDER_PATH, POWER_FUNCTION_FILE, WORKLOAD_START_TIMES_FILE
-from weights import main_time_step, price, migration, pue, energy, w_concurrent_migrations, w_load_cpu, cplex_params, migration_penalty
+from weights import price, migration, pue, energy, w_concurrent_migrations, w_load_cpu, migration_penalty
 
 try:
     profile # type: ignore
@@ -204,14 +204,9 @@ def convert_to_step(actual_datetime, start_time_str, time_step):
     step = (actual_datetime - start_time).total_seconds() / time_step
     return math.ceil(step)
 
-def load_configuration(folder_path, time_step=main_time_step):
+def load_configuration(folder_path, epgap):
     weights_data = f"""
-params = <
-           <{cplex_params['main_model']['time_limit']}, {cplex_params['main_model']['relative_optimality_gap']}, {cplex_params['main_model']['absolute_optimality_gap']}>, 
-           <{cplex_params['mini_model']['time_limit']}, {cplex_params['mini_model']['relative_optimality_gap']}, {cplex_params['mini_model']['absolute_optimality_gap']}>
-         >;
-
-main_time_step = {time_step};
+epgap = {epgap};
 
 price = <{price['cpu']}, {price['memory']}>;
 
@@ -337,12 +332,9 @@ def parse_power_function(file_path, pm_ids):
     return nb_points, piecewise_linear_functions
 
 def convert_power_function_to_model_input_format(pms, power_function_dict, nb_points):
-    # Prepare the output content using the pre-parsed power function
-    turned_on_pms_ids = [pm_id for pm_id in pms if pms[pm_id]['s']['state'] == 1]
-
     output_content = '\n\nnb_points = ' + str(nb_points) + ';\n\n'
     output_content += 'power_function = [\n'
-    for pm_id in turned_on_pms_ids:
+    for pm_id in pms:
         row = power_function_dict[pm_id]
         row_str = '  [' + ', '.join(f'<{x[0]}, {x[1]}>' for x in row) + '],\n'
         output_content += row_str
@@ -395,21 +387,19 @@ def parse_opl_output(output):
     parsed_data = {}
     
     patterns = {
-        'is_on': re.compile(r'is_on = \[(.*?)\];', re.DOTALL),
+        'has_to_be_on': re.compile(r'has_to_be_on = \[(.*?)\];', re.DOTALL),
         'new_allocation': re.compile(r'new_allocation = \[\[(.*?)\]\];', re.DOTALL),
+        'is_migrating_from': re.compile(r'is_migrating_from = \[\[(.*?)\]\];', re.DOTALL),
         'vm_ids': re.compile(r'Virtual Machines IDs: \[(.*?)\]'),
         'pm_ids': re.compile(r'Physical Machines IDs: \[(.*?)\]'),
         'is_allocation': re.compile(r'is_allocation = \[(.*?)\];', re.DOTALL),
-        'is_run': re.compile(r'is_run = \[(.*?)\];', re.DOTALL),
         'is_migration': re.compile(r'is_migration = \[(.*?)\];', re.DOTALL),
-        'cpu_load': re.compile(r' cpu_load = \[(.*?)\]'),
-        'memory_load': re.compile(r' memory_load = \[(.*?)\]'),
     }
     
     for key, pattern in patterns.items():
         match = pattern.search(output)
         if match:
-            if key in ['new_allocation']:
+            if key in ['new_allocation'] or key in ['is_migrating_from']:
                 parsed_data[key] = parse_matrix(match.group(1))
             else:
                 parsed_data[key] = [int(num) if num.isdigit() else float(num) for num in match.group(1).strip().split()]
@@ -445,10 +435,10 @@ def count_non_valid_entries(performance_log_file):
     
     with open(performance_log_file, 'r') as file:
         for line in file:
-            total_entries += 1
-            if "not valid" in line:
-                non_valid_entries += 1
-
+            if "main" in line or "mini" in line:
+                total_entries += 1
+                if "not valid" in line:
+                    non_valid_entries += 1
     return non_valid_entries, total_entries
     
 def parse_matrix(matrix_str):
@@ -466,6 +456,31 @@ def find_two_largest(times):
         elif time > second_max_time:
             second_max_time = time
     return max_time, second_max_time
+
+def find_min_extra_time(vms_extra_time, pm_id):
+    """
+    Returns the minimum extra_time for the given pm_id from the vms_extra_time dictionary.
+
+    Parameters:
+    - vms_extra_time (dict): Dictionary with VM IDs as keys and tuples (from_pm_id, extra_time) as values.
+    - pm_id (str): The pm_id to filter by.
+
+    Returns:
+    - float: The minimum extra_time for the specified pm_id.
+    - None: If the pm_id is not found in any of the entries.
+    """
+    # Extract extra_time values where from_pm_id matches pm_id
+    extra_times = [
+        extra_time 
+        for from_pm_id, extra_time in vms_extra_time.values() 
+        if from_pm_id == pm_id
+    ]
+    
+    if not extra_times:
+        raise ValueError(f"pm id {pm_id} to turn off after migration completed, but no migration completed found")
+    
+    # Return the minimum extra_time
+    return min(extra_times)
 
 def evaluate_piecewise_linear_function(piecewise_function, x_value, migration_overhead=False):
     """
@@ -597,7 +612,7 @@ def calculate_features(step, start_time_str, time_step):
     return workload_ts
 
 
-def calculate_load(physical_machines, active_vms, time_step):
+def calculate_load(physical_machines, active_vms, time_step, pm_manager=False):
     cpu_load = {pm_id: 0.0 for pm_id in physical_machines.keys()}
     memory_load = {pm_id: 0.0 for pm_id in physical_machines.keys()}
 
@@ -608,7 +623,7 @@ def calculate_load(physical_machines, active_vms, time_step):
         
         if pm_id != -1:
             pm = physical_machines.get(pm_id)
-            if pm and pm['s']['state'] == 1 and pm['s']['time_to_turn_on'] < time_step:
+            if pm and (pm['s']['state'] == 1 and pm['s']['time_to_turn_on'] < time_step or pm_manager):
                 cpu_load[pm_id] += vm['requested']['cpu'] / pm['capacity']['cpu']
                 memory_load[pm_id] += vm['requested']['memory'] / pm['capacity']['memory']
 

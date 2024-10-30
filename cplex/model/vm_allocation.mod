@@ -80,24 +80,11 @@ tuple Point {
   float y;
 }
 
-tuple CplexParameters {
-  float time_limit;
-  float relative_optimality_gap;
-  float absolute_optimality_gap;
-}
-
-tuple CplexModelParameters {
-  CplexParameters main_model;
-  CplexParameters mini_model;
-}
-
 // Data
 {PhysicalMachine} physical_machines = ...;
 {VirtualMachine} virtual_machines = ...;
 int nb_points = ...;
 Point power_function[pm in physical_machines][1..nb_points]= ...;
-
-float main_time_step = ...; // seconds
 
 float remaining_allocation_time[vm in virtual_machines] = vm.allocation.total_time - vm.allocation.current_time;
 float remaining_run_time[vm in virtual_machines] = vm.run.total_time - vm.run.current_time;
@@ -105,8 +92,6 @@ float remaining_migration_time[vm in virtual_machines] = vm.migration.total_time
 
 int is_fully_turned_on[pm in physical_machines] =
   (pm.s.time_to_turn_on <= 0 ? 1 : 0); 
-int is_on[pm in physical_machines] = // if is going to be fully turned ON in the next time step (unless it gets turned OFF)
-  (pm.s.time_to_turn_on < main_time_step ? 1 : 0); 
 int old_allocation[vm in virtual_machines][pm in physical_machines] = 
   (vm.allocation.pm == pm.id || vm.run.pm == pm.id || vm.migration.to_pm == pm.id ? 1 : 0);
 int was_allocating[vm in virtual_machines] = 
@@ -138,14 +123,12 @@ float w_load_cpu = ...;
 
 float profit[vm in virtual_machines] = (vm.requested.cpu * price.cpu + vm.requested.memory * price.memory); // Profit per second from running a Virtual Machine
 
-CplexModelParameters params = ...;
+float epgap = ...;
 
 // Set parameters
 execute
 {
-  cplex.tilim= params.main_model.time_limit;
-  cplex.epgap= params.main_model.relative_optimality_gap;
-  cplex.epagap= params.main_model.absolute_optimality_gap;
+  cplex.epgap= epgap;
 } 
 
 // Decision Variables
@@ -163,25 +146,6 @@ dvar boolean has_to_be_on[physical_machines];
 dvar float+ max_migration_source[physical_machines];
 dvar float+ max_migration_target[physical_machines];
 dvar float+ max_migration_multiple[physical_machines];
-
-// Set priorities
-execute {
-  for (var vm in virtual_machines)
-    is_allocation[vm].priority = 4;
-    is_run[vm].priority = 5;
-    is_migration[vm].priority = 3;
-
-  for (var vm in virtual_machines)
-	for (var pm in physical_machines)
-      new_allocation[vm][pm].priority = 10;
-
-  for (var pm in physical_machines)
-    has_to_be_on[pm].priority = 0;
-//    is_multiple_migrations[pm].priority = 1;
-    max_migration_source[pm].priority = 0;
-    max_migration_target[pm].priority = 0;
-    max_migration_multiple[pm].priority = 0;
-}
 
 // Expressions
 dexpr float cpu_load[pm in physical_machines] = (1 / pm.capacity.cpu) * sum(vm in virtual_machines) vm.requested.cpu * new_allocation[vm][pm];
@@ -206,7 +170,7 @@ maximize   (sum(pm in physical_machines) (
 		                   + migration.energy.concurrent * w_concurrent_migrations * max_migration_multiple[pm]
 		                 ) 
 		               + (1 - w_load_cpu) * memory_load_total[pm] 
-		             ) * is_on[pm] 
+		             ) 
                )
 		     + sum (vm in virtual_machines) ( 
 		   	         // allocation case
@@ -223,13 +187,7 @@ maximize   (sum(pm in physical_machines) (
 		  ) * 1000;
 		       
 			   
-subject to {
-  // If Virtual Machine is allocated, the Physical Machine has to be ON (or turning ON)
-  forall(pm in physical_machines) {
-    forall (vm in virtual_machines) {
-      new_allocation[vm][pm] <= is_on[pm]; 
-    }
-  }        
+subject to {     
   // A Virtual Machine is assigned maximum to one Physical Machine
   forall (vm in virtual_machines) {
     sum (pm in physical_machines) new_allocation[vm][pm] <= 1;
@@ -335,10 +293,6 @@ subject to {
   // If a VM is migrating from a PM, the PM has to be fully turned on
   forall (pm in physical_machines) {
     M * is_fully_turned_on[pm] >= sum(vm in virtual_machines) is_migrating_from[vm][pm];
-  }
-  // If a VM is migrating to a PM, the PM has to be fully on
-  forall (pm in physical_machines) {
-    M * is_on[pm] >= sum(vm in virtual_machines) is_migrating_on[vm][pm];
   }
   //  Max source migrations time
   forall (pm in physical_machines) {
