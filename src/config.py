@@ -27,22 +27,20 @@ WORKLOAD_NAME = 'Azure-2020'
 # Simulation parameters
 STARTING_STEP = 1
 TIME_STEP = 5 # Time step in seconds
-NUM_TIME_STEPS = 20000 # Number of time steps to simulate
+NUM_TIME_STEPS = 5000 # Number of time steps to simulate
 NEW_VMS_PER_STEP = 2  # Expected number of new VMs to generate at each time step
 
 # Models to use
-MASTER_MODEL = 'main'
+# MASTER_MODEL = 'main'
 # MASTER_MODEL = 'mini'
 # MASTER_MODEL = 'hybrid'
 # MASTER_MODEL = 'guazzone'
 # MASTER_MODEL = 'shi'
-# MASTER_MODEL = 'first_fit'
-# MASTER_MODEL = 'worst_fit'
-# MASTER_MODEL = 'best_fit'
+MASTER_MODEL = 'best_fit'
 
 MAIN_MODEL_MAX_PMS = 100
 PM_MANAGER_MAX_VMS = 100
-PM_MANAGER_MAX_PMS = 200
+PM_MANAGER_MAX_PMS = 20
 
 # Hard time limits
 HARD_TIME_LIMIT_MAIN = TIME_STEP / 2
@@ -52,7 +50,6 @@ HARD_TIME_LIMIT_MINI = TIME_STEP / 2
 EPGAP_MAIN = 0.02
 EPGAP_MINI = 0.01
 EPGAP_PM_MANAGER = 0.05
-EPGAP_MIGRATION = 0.01
 
 # Paths
 BASE_PATH = ''
@@ -65,7 +62,6 @@ MINI_MODEL_OUTPUT_FOLDER_PATH = os.path.join(BASE_PATH, 'simulation/model_output
 PM_MANAGER_INPUT_FOLDER_PATH = os.path.join(BASE_PATH, 'simulation/pm_manager/input')
 PM_MANAGER_OUTPUT_FOLDER_PATH = os.path.join(BASE_PATH, 'simulation/pm_manager/output')
 OUTPUT_FOLDER_PATH = os.path.join(BASE_PATH, 'simulation/simulation_output')
-MIGRATION_SCHEDULE_FOLDER_PATH = os.path.join(BASE_PATH, 'simulation/migration_schedule')
 LOGS_FOLDER_PATH = os.path.join(BASE_PATH, 'logs')
 
 FLOW_CONTROL_PATH = os.path.join(BASE_PATH, 'model/flow_control.mod')

@@ -3,9 +3,8 @@ import shutil
 import subprocess
 from copy import deepcopy
 
-from mini import save_mini_model_input_format, parse_mini_opl_output, mini_reallocate_vms
 from calculate import calculate_load
-from config import FLOW_CONTROL_PATH, MIGRATION_SCHEDULE_FOLDER_PATH
+from config import FLOW_CONTROL_PATH
 
 try:
     profile # type: ignore
@@ -158,7 +157,7 @@ def get_pms_on_schedule(active_vms, scheduled_vms):
                 pms_on_schedule.append(vm['migration']['from_pm'])
     return pms_on_schedule
 
-def schedule_migration(physical_machines, active_vms, pm, step, vms_to_allocate, scheduled_vms, time_step, power_function_dict, nb_points):
+def schedule_migration(physical_machines, active_vms, pm, vms_to_allocate, scheduled_vms, time_step):
     migrating_vms = [vm for vm in active_vms.values() if vm['migration']['from_pm'] == pm['id']]
     pm_dict = {pm['id']: pm}
     physical_machines_schedule = deepcopy(pm_dict)
@@ -166,92 +165,63 @@ def schedule_migration(physical_machines, active_vms, pm, step, vms_to_allocate,
     cpu_load, memory_load = calculate_load(pm_dict, active_vms, time_step)
     update_physical_machines_load(pm_dict, cpu_load, memory_load)
 
-    for vm in migrating_vms:
-        scheduled_vms[vm['id']] = []
+    for migrating_vm in migrating_vms:
+        scheduled_vms[migrating_vm['id']] = []
 
-        migrating_to_pm = physical_machines[vm['migration']['to_pm']]
-        if vms_to_allocate and migrating_to_pm['s']['state'] == 1 and migrating_to_pm['s']['time_to_turn_on'] + vm['migration']['total_time'] - vm['migration']['current_time'] < time_step:
-            filename = f"{step}_pm{pm['id']}_vm{vm['id']}"
+        migrating_to_pm = physical_machines[migrating_vm['migration']['to_pm']]
+        if vms_to_allocate and migrating_to_pm['s']['state'] == 1 and migrating_to_pm['s']['time_to_turn_on'] + migrating_vm['migration']['total_time'] - migrating_vm['migration']['current_time'] < time_step:
             
-            cpu_overload = vm['requested']['cpu'] / physical_machines[pm['id']]['capacity']['cpu']
-            memory_overload = vm['requested']['memory'] / physical_machines[pm['id']]['capacity']['memory']
+            cpu_overload = migrating_vm['requested']['cpu'] / physical_machines[migrating_to_pm['id']]['capacity']['cpu']
+            memory_overload = migrating_vm['requested']['memory'] / physical_machines[migrating_to_pm['id']]['capacity']['memory']
 
             physical_machines_schedule[pm['id']]['s']['load']['cpu'] -= cpu_overload
             physical_machines_schedule[pm['id']]['s']['load']['memory'] -= memory_overload
 
-            schedule_migration_folder_path = os.path.join(MIGRATION_SCHEDULE_FOLDER_PATH, f"schedule/step_{step}/pm_{pm['id']}")
-            os.makedirs(schedule_migration_folder_path, exist_ok=True)
-
-            # Convert into model input format
-            mini_vm_model_input_file_path, mini_pm_model_input_file_path = save_mini_model_input_format(vms_to_allocate, physical_machines_schedule, filename, schedule_migration_folder_path, power_function_dict, nb_points)
-            
-            # Run mini OPL model
-            opl_output = run_opl_model(mini_vm_model_input_file_path, mini_pm_model_input_file_path, MIGRATION_SCHEDULE_FOLDER_PATH, schedule_migration_folder_path, filename, "overload")
-            
-            parsed_data = parse_mini_opl_output(opl_output)
-            partial_allocation = parsed_data['allocation']
-            vm_ids = parsed_data['vm_ids']
-            
-            # Assign a VM to a completed VM migration
-            for vm_index, vm_id in enumerate(vm_ids):
-                if partial_allocation[vm_index][0] == 1:
-                    scheduled_vms[vm['id']].append(active_vms[vm_id])
-                    del vms_to_allocate[vm_id]
+            for vm in vms_to_allocate:
+                if vm['requested']['cpu'] + pm['s']['load']['cpu'] * pm['capacity']['cpu'] <= pm['capacity']['cpu'] and vm['requested']['memory'] + pm['s']['load']['memory'] * pm['capacity']['memory'] <= pm['capacity']['memory']:
+                    scheduled_vms[migrating_vm['id']].append(active_vms[migrating_vm['id']])
+                    vms_to_allocate.remove(vm)
 
                     # Update the scheduled load of the physical machine
-                    cpu_scheduled_load = active_vms[vm_id]['requested']['cpu'] / physical_machines[pm['id']]['capacity']['cpu']
-                    memory_scheduled_load = active_vms[vm_id]['requested']['memory'] / physical_machines[pm['id']]['capacity']['memory']
+                    cpu_scheduled_load = vm['requested']['cpu'] / physical_machines[pm['id']]['capacity']['cpu']
+                    memory_scheduled_load = vm['requested']['memory'] / physical_machines[pm['id']]['capacity']['memory']
                     physical_machines_schedule[pm['id']]['s']['load']['cpu'] += cpu_scheduled_load
                     physical_machines_schedule[pm['id']]['s']['load']['memory'] += memory_scheduled_load
                     
-                    print(f"VM {vm_ids[vm_index]} scheduled on PM {pm['id']} after VM {vm['id']} migration.")
+                    print(f"VM {vm['id']} scheduled on PM {pm['id']} after VM {vm['id']} migration.")
 
 @profile                   
-def solve_overload(pm, physical_machines, active_vms, scheduled_vms, step, time_step, power_function_dict, nb_points):
-    vms_to_allocate = {}
+def solve_overload(pm, physical_machines, active_vms, scheduled_vms, time_step):
+    vms_to_allocate = []
     pm_dict = {pm['id']: pm}
 
     for vm in active_vms.values():
         if vm['allocation']['pm'] == pm['id'] and vm['allocation']['current_time'] == 0:
             vm['allocation']['pm'] = -1
-            vms_to_allocate[vm['id']] = vm
+            vms_to_allocate.append(vm)
     
     cpu_load, memory_load = calculate_load(pm_dict, active_vms, time_step)
     update_physical_machines_load(pm_dict, cpu_load, memory_load)
 
-    physical_machines_schedule = deepcopy({pm['id']: pm})
-    
-    # Convert into model input format
-    mini_vm_model_input_file_path, mini_pm_model_input_file_path = save_mini_model_input_format(vms_to_allocate, physical_machines_schedule, step, MIGRATION_SCHEDULE_FOLDER_PATH, power_function_dict, nb_points)
-    
-    # Run mini OPL model
-    opl_output = run_opl_model(mini_vm_model_input_file_path, mini_pm_model_input_file_path, MIGRATION_SCHEDULE_FOLDER_PATH, MIGRATION_SCHEDULE_FOLDER_PATH, step, "overload")
-    
-    parsed_data = parse_mini_opl_output(opl_output)
-    partial_allocation = parsed_data['allocation']
-    vm_ids = parsed_data['vm_ids']
-    pm_ids = parsed_data['pm_ids']
-    
-    # Reallocate VMs
-    mini_reallocate_vms(vm_ids, pm_ids, partial_allocation, active_vms)
+    sorted_vms_to_allocate = sorted(vms_to_allocate, key=lambda vm: vm['run']['total_time'], reverse=True)
 
-    for vm_id in list(vms_to_allocate.keys()):  # Iterate over a copy of the keys
-        vm = vms_to_allocate[vm_id]
-        if vm['allocation']['pm'] != -1:
-            del vms_to_allocate[vm['id']]
+    for vm in sorted_vms_to_allocate:
+        if vm['requested']['cpu'] + pm['s']['load']['cpu'] * pm['capacity']['cpu'] <= pm['capacity']['cpu'] and vm['requested']['memory'] + pm['s']['load']['memory'] * pm['capacity']['memory'] <= pm['capacity']['memory']:
+            vm['allocation']['pm'] = pm['id']
             pm['s']['load']['cpu'] += vm['requested']['cpu'] / pm['capacity']['cpu']
             pm['s']['load']['memory'] += vm['requested']['memory'] / pm['capacity']['memory']
+            sorted_vms_to_allocate.remove(vm)
     
-    if vms_to_allocate:
-        schedule_migration(physical_machines, active_vms, pm, step, vms_to_allocate, scheduled_vms, time_step, power_function_dict, nb_points)
+    if sorted_vms_to_allocate:
+        schedule_migration(physical_machines, active_vms, pm, sorted_vms_to_allocate, scheduled_vms, time_step)
 
 @profile
-def detect_overload(physical_machines, active_vms, scheduled_vms, step, time_step, power_function_dict, nb_points):
+def detect_overload(physical_machines, active_vms, scheduled_vms, time_step):
     cpu_load, memory_load = calculate_load(physical_machines, active_vms, time_step)
     for pm in physical_machines.values():
         pm_dict = {pm['id']: pm}
         if cpu_load[pm['id']] > 1 or memory_load[pm['id']] > 1:
-            solve_overload(pm, physical_machines, active_vms, scheduled_vms, step, time_step, power_function_dict, nb_points)
+            solve_overload(pm, physical_machines, active_vms, scheduled_vms, time_step)
         cpu_load_pm, memory_load_pm = calculate_load(pm_dict, active_vms, time_step)
 
         if cpu_load_pm[pm['id']] > 1 or memory_load_pm[pm['id']] > 1:

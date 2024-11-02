@@ -71,9 +71,6 @@ with open(args.file, 'r') as f:
         elif line.startswith('Completed migrations:'):
             key, value = line.split(':', 1)
             record['Completed Migrations'] = int(value.strip())
-        elif line.startswith('Removed VMs:'):
-            key, value = line.split(':', 1)
-            record['Removed VMs'] = int(value.strip())
         elif line.startswith('Max percentage of PMs on:'):
             key, value = line.split(':', 1)
             record['Max % PMs On'] = float(value.strip().replace('%', ''))
@@ -130,7 +127,7 @@ df['Profit Margin (%)'] = (df['Net Profit'] / df['Revenue']) * 100
 numeric_columns = [
     'Revenue', 'Costs', 'Net Profit',
     'PM Energy Cost', 'Migration Energy Cost',
-    'Completed Migrations', 'Removed VMs',
+    'Completed Migrations',
     'Max % PMs On', 'Avg PMs On', 'Total PMs',
     'Avg PM CPU Load', 'Avg PM Memory Load',
     'Profit Margin (%)',

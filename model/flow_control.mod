@@ -6,23 +6,15 @@ main {
   	writeln("\nMAIN MODEL\n")
     var inputFolderPath = "simulation/model_input_main/";
     var modelFile = "vm_allocation.mod";
-    var settingsFile = "settings_main_model.ops";
   }    
   else if (model == "mini") {
   	writeln("\nMINI MODEL\n")
     var inputFolderPath = "simulation/model_input_mini/";
     var modelFile = "vm_allocation_mini.mod";
-    var settingsFile = "settings_mini_model.ops";
   }    
   else if (model == "pm_manager") {
   	writeln("\nPM MANAGER\n")
     var inputFolderPath = "simulation/pm_manager/input/";
-    var modelFile = "vm_allocation_mini.mod";
-    var settingsFile = "settings_pm_manager.ops";
-  }    
-  else if (model == "overload") {
-  	writeln("\nOVERLOAD\n")
-    var inputFolderPath = "simulation/migration_schedule/";
     var modelFile = "vm_allocation_mini.mod";
   }    
 
@@ -50,9 +42,6 @@ main {
   model.addDataSource(physical_machines);
   model.addDataSource(virtual_machines);
   model.addDataSource(weights);
-  if (model == "main" || model == "mini" || model == "pm_manager") {
-    model.applyOpsSettings(folderPath, settingsFile);
-  }
   
   model.generate();
   

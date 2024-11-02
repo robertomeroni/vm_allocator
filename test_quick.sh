@@ -5,13 +5,13 @@ USE_RANDOM_SEED_VALUES=(True)
 SEED_NUMBER_VALUES=($(seq 1 1))  # This creates a range from 1 to 20
 NEW_VMS_PER_STEP_VALUES=(1)
 MASTER_MODEL_VALUES=(
-                    'main' 
-                    'hybrid'
+                    # 'main' 
+                    # 'hybrid'
                     'mini'
                     # 'first_fit'
-                    'best_fit' 
-                    'guazzone'
-                    'shi'
+                    # 'best_fit' 
+                    # 'guazzone'
+                    # 'shi'
                     )
 WORKLOAD_NAME_VALUES=(
   'Chameleon-New-2020'
@@ -66,7 +66,7 @@ function set_time_parameters() {
       ;;
     "METACENTRUM-2013")
       TIME_STEP=3
-      NUM_TIME_STEPS=1000
+      NUM_TIME_STEPS=600
       ;;
     "PIK-IPLEX-2009")
       TIME_STEP=20

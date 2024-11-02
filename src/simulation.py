@@ -1,7 +1,8 @@
-from copy import deepcopy
 import csv
+import os
 import time
 import math
+from copy import deepcopy
 from collections import defaultdict
 from colorama import Fore
 
@@ -351,7 +352,7 @@ def run_main_model(active_vms, physical_machines_on, scheduled_vms, pms_to_turn_
                     migrating_to_pm = vm_on_pm['migration']['to_pm']
                     if migrating_to_pm != -1:
                         pms_with_migrations[migrating_to_pm] = physical_machines_on[migrating_to_pm]
-                detect_overload(pms_with_migrations, vms_on_pms_with_migrations, scheduled_vms, step, time_step, power_function_dict, nb_points)
+                detect_overload(pms_with_migrations, vms_on_pms_with_migrations, scheduled_vms, time_step)
             
             log_performance(step, "main", end_time_opl - start_time_opl, opl_output_valid, num_vms, num_pms, performance_log_file)
             
@@ -502,9 +503,11 @@ def simulate_time_steps(initial_vms, initial_pms, num_steps, new_vms_per_step, n
     # Get idle power for each physical machine
     idle_power = {pm_id: evaluate_piecewise_linear_function(power_function_dict[pm_id], 0) for pm_id in pm_ids}
     
-    with open(performance_log_file, "w", newline='') as f:
+    file_mode = "a" if os.path.exists(performance_log_file) else "w"
+    with open(performance_log_file, file_mode, newline='') as f:
         writer = csv.writer(f)
-        writer.writerow(["Step", "Model", "Time", "Status", "Num VMs", "Num PMs"])
+        if file_mode == "w":
+            writer.writerow(["Step", "Model", "Time", "Status", "Num VMs", "Num PMs"])
 
     print(f"Initialization done")
     for step in range(starting_step, starting_step + num_steps + 1):
@@ -596,15 +599,6 @@ def simulate_time_steps(initial_vms, initial_pms, num_steps, new_vms_per_step, n
             update_physical_machines_load(physical_machines, cpu_load, memory_load)
 
             launch_pm_manager(active_vms, physical_machines, is_on, step, time_step, power_function_dict, nb_points, scheduled_vms, pms_to_turn_off_after_migration, performance_log_file, pm_manager_max_vms=pm_manager_max_vms, pm_manager_max_pms=pm_manager_max_pms)
-            from allocation import get_non_allocated_workload
-            for pm_id, pm in physical_machines.items():
-                if pm['s']['state'] == 1 and is_on[pm_id] == 0:
-                    non_allocated_vms = get_non_allocated_workload(active_vms, scheduled_vms)
-                    
-                    if len(non_allocated_vms) > 0:
-                        for non_allocated_vm in non_allocated_vms.values():
-                            if non_allocated_vm['requested']['cpu'] <= pm['capacity']['cpu'] and non_allocated_vm['requested']['memory'] <= pm['capacity']['memory']:
-                                print(f"PM {pm_id} is getting turned off but VM {non_allocated_vm['id']} can be allocated on it")
             turned_on_pms, turned_off_pms = update_physical_machines_state(physical_machines, initial_physical_machines, is_on)
 
         if model_to_run != 'none':

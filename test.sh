@@ -5,20 +5,20 @@ USE_RANDOM_SEED_VALUES=(True)
 SEED_NUMBER_VALUES=($(seq 1 1))  # This creates a range from 1 to 20
 NEW_VMS_PER_STEP_VALUES=(1)
 MASTER_MODEL_VALUES=(
-                    'main' 
-                    'hybrid'
+                    # 'main' 
+                    # 'hybrid'
                     'mini'
                     # 'first_fit'
-                    'best_fit' 
-                    'guazzone'
-                    'shi'
+                    # 'best_fit' 
+                    # 'guazzone'
+                    # 'shi'
                     )
 WORKLOAD_NAME_VALUES=(
   'Chameleon-New-2020'
   # 'Chameleon-Legacy-2020'
   'LLNL-Thunder-2007'
   'METACENTRUM-2009'
-  'METACENTRUM-2013'
+  # 'METACENTRUM-2013'
   'PIK-IPLEX-2009'
   'TU-Delft-2007'
   'UniLu-Gaia-2014'

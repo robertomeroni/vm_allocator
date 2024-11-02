@@ -28,7 +28,7 @@ main {
   model.addDataSource(physical_machines);
   model.addDataSource(virtual_machines);
   model.addDataSource(weights);
-  model.applyOpsSettings(folderPath, settingsFile);
+  // model.applyOpsSettings(folderPath, settingsFile);
   
   model.generate();
  

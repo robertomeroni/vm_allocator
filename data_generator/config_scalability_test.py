@@ -35,8 +35,8 @@ migration = {
 
 # Default Values for the Number of Machines
 default_values = {
-    'num_physical_machines': 10,            # Default number of physical machines
-    'num_virtual_machines': 20,             # Default number of virtual machines
+    'num_physical_machines': 50,            # Default number of physical machines
+    'num_virtual_machines': 300,             # Default number of virtual machines
     'running_percentage': 0                # Percentage of VMs that are running at the beginning
 }
 

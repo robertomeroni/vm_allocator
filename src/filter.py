@@ -3,27 +3,6 @@ import heapq
 
 EPSILON = 0.00001
 
-def filter_dict_randomly(dict, n):
-    if n >= len(dict):
-        return dict.copy()
-    else:
-        keys = random.sample(list(dict), n)
-        return {k: dict[k] for k in keys}
-
-def split_dict(d, max_elements_per_subset):
-    keys = list(d.keys())
-    n = len(keys)
-    # Calculate the number of subsets needed
-    num_subsets = max(1, (n + max_elements_per_subset - 1) // max_elements_per_subset)
-    # Calculate the approximate size per subset
-    size_per_subset = (n + num_subsets - 1) // num_subsets  # Ceiling division
-    subsets = []
-    for i in range(0, n, size_per_subset):
-        subset_keys = keys[i:i + size_per_subset]
-        subset_dict = {k: d[k] for k in subset_keys}
-        subsets.append(subset_dict)
-    return subsets
-
 def filter_full_pms(physical_machines):
     # Create a list of PM IDs to remove
     pm_ids_to_remove = [
@@ -109,3 +88,33 @@ def filter_vms_on_pms_and_non_allocated(vms, physical_machines):
             filtered_vms[vm_id] = vm
                 
     return filtered_vms
+
+def split_dict_randomly(d, max_elements_per_subset):
+    keys = list(d.keys())
+    random.shuffle(keys)  # Shuffle the keys to ensure randomness
+    n = len(keys)
+    # Calculate the number of subsets needed
+    num_subsets = max(1, (n + max_elements_per_subset - 1) // max_elements_per_subset)
+    # Calculate the approximate size per subset
+    size_per_subset = (n + num_subsets - 1) // num_subsets  # Ceiling division
+    subsets = []
+    for i in range(0, n, size_per_subset):
+        subset_keys = keys[i:i + size_per_subset]
+        subset_dict = {k: d[k] for k in subset_keys}
+        subsets.append(subset_dict)
+    return subsets
+
+def split_dict_sorted_by_capacity(d, max_elements_per_subset):
+    keys = list(d.keys())
+    keys.sort(key=lambda x: 2*d[x]['capacity']['cpu'] + d[x]['capacity']['memory'])
+    n = len(keys)
+    # Calculate the number of subsets needed
+    num_subsets = max(1, (n + max_elements_per_subset - 1) // max_elements_per_subset)
+    # Calculate the approximate size per subset
+    size_per_subset = (n + num_subsets - 1) // num_subsets  # Ceiling division
+    subsets = []
+    for i in range(0, n, size_per_subset):
+        subset_keys = keys[i:i + size_per_subset]
+        subset_dict = {k: d[k] for k in subset_keys}
+        subsets.append(subset_dict)
+    return subsets

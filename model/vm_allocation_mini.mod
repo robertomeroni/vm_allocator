@@ -129,7 +129,7 @@ dexpr float additional_energy[pm in physical_machines] =
   
 float profit[vm in virtual_machines] = (vm.requested.cpu * price.cpu + vm.requested.memory * price.memory);                   
 
-// Objective Function: net profit per 1000 seconds
+// Objective Function
 maximize   1000*sum(pm in physical_machines) ( 
 	         - PUE * energy.cost * (is_on[pm] * static_energy[pm] + additional_energy[pm])
 		     + sum (vm in virtual_machines) ( 
