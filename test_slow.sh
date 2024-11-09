@@ -16,26 +16,26 @@ NEW_VMS_PATTERN_VALUES=(
                         )
 
 MASTER_MODEL_VALUES=(
-                    # 'main' 
+                    'main' 
                     # 'main_simple'
-                    # 'mini'
-                    # 'hybrid'
-                    # 'compound'
+                    'mini'
+                    'hybrid'
+                    'compound'
                     'first_fit'
-                    # 'best_fit' 
-                    # 'guazzone'
-                    # 'shi_OM'
-                    # 'shi_AC'
-                    # 'shi_PU'
+                    'best_fit' 
+                    'guazzone'
+                    'shi_OM'
+                    'shi_AC'
+                    'shi_PU'
                     )
 WORKLOAD_NAME_VALUES=(
-  # 'Chameleon-New-2020'
-  # 'Chameleon-Legacy-2020'
-  # 'LLNL-Thunder-2007'
-  # 'METACENTRUM-2009'
+  'Chameleon-New-2020'
+  'Chameleon-Legacy-2020'
+  'LLNL-Thunder-2007'
+  'METACENTRUM-2009'
   # 'METACENTRUM-2013'
-  # 'PIK-IPLEX-2009'
-  # 'TU-Delft-2007'
+  'PIK-IPLEX-2009'
+  'TU-Delft-2007'
   'UniLu-Gaia-2014'
   # 'Intel-Netbatch-2012-A'
   # 'Azure-2020'
@@ -62,69 +62,69 @@ function set_parameters() {
   case "$WORKLOAD_NAME" in
     "Azure-2020")
       TIME_STEP=5
-      NUM_TIME_STEPS=500
+      NUM_TIME_STEPS=5000
       MAIN_MODEL_MAX_PMS=20
       PM_MANAGER_MAX_PMS=20
       ;;
     "Chameleon-Legacy-2020")
       TIME_STEP=5000
-      NUM_TIME_STEPS=7000
+      NUM_TIME_STEPS=70000
       MAIN_MODEL_MAX_PMS=30
       PM_MANAGER_MAX_PMS=50
       ;;
     "Chameleon-New-2020")
-      TIME_STEP=500
-      NUM_TIME_STEPS=5000
+      TIME_STEP=50
+      NUM_TIME_STEPS=5000000
       MAIN_MODEL_MAX_PMS=30
       PM_MANAGER_MAX_PMS=200
       ;;
     "Intel-Netbatch-2012-A")
       TIME_STEP=5
-      NUM_TIME_STEPS=200
+      NUM_TIME_STEPS=700
       MAIN_MODEL_MAX_PMS=20
       PM_MANAGER_MAX_PMS=20
       ;;
     "LLNL-Thunder-2007")
       TIME_STEP=50
-      NUM_TIME_STEPS=1000
+      NUM_TIME_STEPS=5000
       MAIN_MODEL_MAX_PMS=30
       PM_MANAGER_MAX_PMS=50
       ;;
     "METACENTRUM-2009")
       TIME_STEP=80
-      NUM_TIME_STEPS=3000
+      NUM_TIME_STEPS=15000
       MAIN_MODEL_MAX_PMS=30
       PM_MANAGER_MAX_PMS=80
       ;;
     "METACENTRUM-2013")
       TIME_STEP=3
-      NUM_TIME_STEPS=600
+      NUM_TIME_STEPS=10000
       MAIN_MODEL_MAX_PMS=30
       PM_MANAGER_MAX_PMS=20
       ;;
     "PIK-IPLEX-2009")
       TIME_STEP=40
-      NUM_TIME_STEPS=4000
+      NUM_TIME_STEPS=20000
       MAIN_MODEL_MAX_PMS=30
       PM_MANAGER_MAX_PMS=30
       ;;
     "TU-Delft-2007")
       TIME_STEP=50
-      NUM_TIME_STEPS=5000
+      NUM_TIME_STEPS=50000
       MAIN_MODEL_MAX_PMS=30
       PM_MANAGER_MAX_PMS=200
       ;;
     "UniLu-Gaia-2014")
       TIME_STEP=40
-      NUM_TIME_STEPS=3000
+      NUM_TIME_STEPS=30000
       MAIN_MODEL_MAX_PMS=30
       PM_MANAGER_MAX_PMS=200
       ;;
       
     *)
-      TIME_STEP=20  # Default value
-      NUM_TIME_STEPS=1000  # Default value
-      MAIN_MODEL_MAX_PMS=50
+      TIME_STEP=500  # Default value
+      NUM_TIME_STEPS=10000  # Default value
+      MAIN_MODEL_MAX_PMS=30
       PM_MANAGER_MAX_PMS=50
       ;;
   esac
@@ -269,7 +269,7 @@ for USE_RANDOM_SEED in "${USE_RANDOM_SEED_VALUES[@]}"; do
             echo "Final Net Profit: $FINAL_NET_PROFIT" >> "$RESULTS_FILE"
             echo "=============================" >> "$RESULTS_FILE"
             echo "" >> "$RESULTS_FILE"
-            
+
             echo "Test $CURRENT_TEST of $TOTAL_TESTS"
             echo "USE_RANDOM_SEED=$USE_RANDOM_SEED, SEED_NUMBER=$SEED_NUMBER, NEW_VMS_PER_STEP=$NEW_VMS_PER_STEP, NEW_VMS_PATTERN=$NEW_VMS_PATTERN"
             echo "------------------------------------------"

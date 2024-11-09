@@ -68,6 +68,11 @@ with open(args.file, 'r') as f:
                 num_time_steps = value.strip()
             elif num_time_steps != value.strip():
                 time_step = None
+        elif line.startswith('Time taken for this configuration:'):
+            key, value = line.split(':', 1)
+            # Extract numeric part from the string
+            time_value = ''.join(filter(str.isdigit, value.strip()))
+            record['Time Taken (s)'] = float(time_value)
         elif line.startswith('Completed migrations:'):
             key, value = line.split(':', 1)
             record['Completed Migrations'] = int(value.strip())
@@ -103,6 +108,7 @@ with open(args.file, 'r') as f:
             key, value = line.split(':', 1)
             value = value.strip().replace('$', '')
             record['Net Profit'] = float(value)
+      
         elif line.startswith('============================'):
             # End of current record
             if record:
@@ -177,6 +183,7 @@ for workload in df['WORKLOAD_NAME'].unique():
         'Avg PM CPU Load': 'mean',
         'Avg PM Memory Load': 'mean',
         'Profit Margin (%)': 'mean',
+        'Time Taken (s)': 'mean',
         # Add other columns as needed
     }
     df_grouped = df_workload.groupby('Group', sort=False).agg(aggregation_functions).reset_index()
@@ -201,7 +208,8 @@ for workload in df['WORKLOAD_NAME'].unique():
             'Avg PMs On': '{:.2f}',
             'Avg PM CPU Load': '{:.2f}%',
             'Avg PM Memory Load': '{:.2f}%',
-            'Profit Margin (%)': '{:.2f}%'
+            'Profit Margin (%)': '{:.2f}%',
+            'Time Taken (s)': '{:,.0f} s'
         })\
         .background_gradient(cmap='RdYlGn', subset=['Net Profit'])\
         .bar(subset=['Completed Migrations'], color='lightgreen')\

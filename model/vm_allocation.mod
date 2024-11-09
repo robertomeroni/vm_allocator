@@ -117,18 +117,18 @@ ArchitectureFloat price = ...;
 Energy energy = ...;
 float PUE = ...;
 MigrationWeights migration = ...;
-float migration_penalty = ...;
 float w_concurrent_migrations = ...;
 float w_load_cpu = ...;
 
-float profit[vm in virtual_machines] = (vm.requested.cpu * price.cpu + vm.requested.memory * price.memory); // Profit per second from running a Virtual Machine
+float revenue[vm in virtual_machines] = (vm.requested.cpu * price.cpu + vm.requested.memory * price.memory); // Revenue per second from running a Virtual Machine
 
 float epgap = ...;
 
 // Set parameters
 execute
 {
-  cplex.epgap= epgap;
+  cplex.epgap=epgap;
+  cplex.workmem=16384;
 } 
 
 // Decision Variables
@@ -158,7 +158,7 @@ dexpr float memory_load_migration[pm in physical_machines] = (1 / pm.capacity.me
 dexpr int is_added[vm in virtual_machines] = (1 - sum(pm in physical_machines) old_allocation[vm][pm]) * sum(pm in physical_machines) new_allocation[vm][pm];
 
 // Model
-// Objective Function: net profit per 1000 seconds
+// Objective Function: 
 maximize   (sum(pm in physical_machines) ( 
 	         - PUE * energy.cost * (
 	         		 static_power[pm] * has_to_be_on[pm]
@@ -174,19 +174,15 @@ maximize   (sum(pm in physical_machines) (
                )
 		     + sum (vm in virtual_machines) ( 
 		   	         // allocation case
-        		       is_allocating_on[vm][pm] * profit[vm] * vm.run.total_time                                                 // total profit
-        		     / (pm.s.time_to_turn_on + (remaining_allocation_time[vm] + remaining_run_time[vm]) / pm.features.speed)     // effective remaining time
+        		       is_allocating_on[vm][pm]
         		     // run case
-        		     + is_running_on[vm][pm] * profit[vm] * vm.run.total_time      // total profit
-        		     / (remaining_run_time[vm] / pm.features.speed)                // effective remaining time
+        		     + is_running_on[vm][pm]
 		             // migration case
-		             + is_migrating_on[vm][pm] * profit[vm] * vm.run.total_time	* migration_penalty                     // total profit
-		             / (pm.s.time_to_turn_on + remaining_run_time[vm] / pm.features.speed + vm.migration.down_time)     // effective remaining time
-		       )
+		             + is_migrating_on[vm][pm] * (1 - vm.migration.down_time / remaining_run_time[vm])
+		       ) * revenue[vm] / pm.features.speed
 		   )
 		  ) * 1000;
-		       
-			   
+		  
 subject to {     
   // A Virtual Machine is assigned maximum to one Physical Machine
   forall (vm in virtual_machines) {

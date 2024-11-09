@@ -101,14 +101,15 @@ ArchitectureFloat price = ...;
 Energy energy = ...;
 float PUE = ...;
 MigrationWeights migration = ...;
-float migration_penalty = ...;
 float w_concurrent_migrations = ...;
 float w_load_cpu = ...;
 
 float epgap = ...;
 
+
 execute {
-  cplex.epgap = epgap;
+  cplex.epgap=epgap;
+  cplex.workmem=16384;
 }
 
 // Energy consumption of each Physical Machine, depending by the load
@@ -118,9 +119,11 @@ float static_energy[pm in physical_machines] = power_function[pm][1].y;
 pwlFunction dynamic_energy[pm in physical_machines] = 
   piecewise (p in 1..nb_points){slopeBeforePoint[pm][p] -> power_function[pm][p].x; 0} (0, 0);
 
+// Decision Variables
 dvar boolean allocation[virtual_machines][physical_machines];
 dvar boolean is_on[physical_machines];
 
+// Expressions
 dexpr float cpu_load[pm in physical_machines] = pm.s.load.cpu + (1 / pm.capacity.cpu) * sum(vm in virtual_machines) vm.requested.cpu * allocation[vm][pm];
 dexpr float memory_load[pm in physical_machines] = pm.s.load.memory + (1 / pm.capacity.memory) * sum(vm in virtual_machines) vm.requested.memory * allocation[vm][pm]; 
 dexpr float additional_energy[pm in physical_machines] = 
@@ -133,7 +136,7 @@ float profit[vm in virtual_machines] = (vm.requested.cpu * price.cpu + vm.reques
 maximize   1000*sum(pm in physical_machines) ( 
 	         - PUE * energy.cost * (is_on[pm] * static_energy[pm] + additional_energy[pm])
 		     + sum (vm in virtual_machines) ( 
-        		   allocation[vm][pm] * profit[vm] / pm.features.speed // allocation case
+        		   allocation[vm][pm] * profit[vm] / pm.features.speed
 		  	   )
 		   );
 	   
@@ -142,14 +145,12 @@ subject to {
   forall (vm in virtual_machines) {
     sum (pm in physical_machines) allocation[vm][pm] <= 1;
   } 
-  // Physical Machine CPU capacity
+  // Physical Machine CPU and Memory capacity
   forall(pm in physical_machines) {
     cpu_load[pm] <= 1; 
-  }
-  // Physical Machine Memory capacity
-  forall(pm in physical_machines) {
     memory_load[pm] <= 1; 
   }
+  // If a Physical Machine is loaded, it has to be ON
   forall(pm in physical_machines) {
     is_on[pm] >= cpu_load[pm];
     is_on[pm] >= memory_load[pm];

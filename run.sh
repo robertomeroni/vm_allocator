@@ -57,12 +57,14 @@ fi
 export NO_COLOR=1
 
 # Clean up previous simulation files
-rm -rf ./simulation/model_input_main        \
-       ./simulation/model_output_main       \
-       ./simulation/model_input_mini        \
-       ./simulation/model_output_mini       \
-       ./simulation/pm_manager              \
-       ./simulation/migration_schedule      \
+rm -rf ./simulation/model_input_main         \
+       ./simulation/model_output_main        \
+       ./simulation/model_input_mini         \
+       ./simulation/model_output_mini        \
+       ./simulation/model_input_migration    \
+       ./simulation/model_output_migration   \
+       ./simulation/pm_manager               \
+       ./simulation/migration_schedule       \
        ./simulation/simulation_output
 
 # Import the necessary variables from the Python config file

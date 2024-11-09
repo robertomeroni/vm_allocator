@@ -1,18 +1,28 @@
 string model_name = ...;
 
 main {
-  var model = thisOplModel.dataElements.model_name;
-  if (model == "main") {
+  var model_name = thisOplModel.dataElements.model_name;
+  if (model_name == "main") {
   	writeln("\nMAIN MODEL\n")
     var inputFolderPath = "simulation/model_input_main/";
     var modelFile = "vm_allocation.mod";
   }    
-  else if (model == "mini") {
+  if (model_name == "main_simple") {
+  	writeln("\nMAIN MODEL SIMPLE\n")
+    var inputFolderPath = "simulation/model_input_main/";
+    var modelFile = "vm_allocation_simple.mod";
+  }    
+  else if (model_name == "mini") {
   	writeln("\nMINI MODEL\n")
     var inputFolderPath = "simulation/model_input_mini/";
     var modelFile = "vm_allocation_mini.mod";
   }    
-  else if (model == "pm_manager") {
+  else if (model_name == "migration") {
+  	writeln("\nMIGRATION MODEL\n")
+    var inputFolderPath = "simulation/model_input_migration/";
+    var modelFile = "vm_allocation_mini.mod";
+  }    
+  else if (model_name == "pm_manager") {
   	writeln("\nPM MANAGER\n")
     var inputFolderPath = "simulation/pm_manager/input/";
     var modelFile = "vm_allocation_mini.mod";
@@ -44,7 +54,6 @@ main {
   model.addDataSource(weights);
   
   model.generate();
-  
 
   if (cplex.solve()) {
     

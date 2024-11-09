@@ -8,7 +8,6 @@ main {
   var physicalMachinesFile = "physical_machines.dat";
   var virtualMachinesFile = "virtual_machines.dat";
   var weightsFile = "weights.dat";
-  var settingsFile= "settings.ops";
   
   // Create complete paths by concatenating folder paths and file names
   var modelPath = folderPath + modelFile;
@@ -28,7 +27,6 @@ main {
   model.addDataSource(physical_machines);
   model.addDataSource(virtual_machines);
   model.addDataSource(weights);
-  // model.applyOpsSettings(folderPath, settingsFile);
   
   model.generate();
  
