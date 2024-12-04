@@ -11,6 +11,7 @@ tuple Migration {
   float down_time;
   float from_pm;
   float to_pm;
+  float energy;
 }
 
 tuple ArchitectureInt {
@@ -23,10 +24,6 @@ tuple ArchitectureFloat {
   float memory;
 }
 
-tuple Features {
-  float speed;
-}
-
 tuple State {
   float time_to_turn_on;
   float time_to_turn_off;
@@ -37,8 +34,8 @@ tuple State {
 tuple PhysicalMachine {
   key int id;
   ArchitectureInt capacity;
-  Features features;
   State s;
+  int type;
 };
 
 tuple VirtualMachine {
@@ -49,40 +46,10 @@ tuple VirtualMachine {
   Migration migration;
 };
 
-tuple TimeAndPower {
-  float time;
-  float power;
-}
-
-tuple PMWeights {
-  TimeAndPower turn_on;
-  TimeAndPower turn_off;
-}
-
-tuple SourceTarget {
-  float source;
-  float target;
-}
-
-tuple MigrationEnergy {
-  SourceTarget cpu_overhead;
-  float concurrent;
-}
-
-tuple MigrationTime {
-  float memory_dirty_rate;
-  float network_bandwidth;
-  float resume_vm_on_target;
-}
-
-tuple MigrationWeights {
-  MigrationTime time;
-  MigrationEnergy energy;
-}
-
-tuple Energy {
-  float cost;
-  float limit;
+tuple Price {
+  float cpu;
+  float memory;
+  float energy;
 }
 
 tuple Point {
@@ -94,14 +61,11 @@ tuple Point {
 {PhysicalMachine} physical_machines = ...;
 {VirtualMachine} virtual_machines= ...;
 int nb_points = ...;
-Point power_function[pm in physical_machines][1..nb_points]= ...;
+Point specific_power_function[pm in physical_machines][1..nb_points]= ...;
 
 // Weights
-ArchitectureFloat price = ...;
-Energy energy = ...;
+Price price = ...;
 float PUE = ...;
-MigrationWeights migration = ...;
-float w_concurrent_migrations = ...;
 float w_load_cpu = ...;
 
 float epgap = ...;
@@ -114,10 +78,10 @@ execute {
 
 // Energy consumption of each Physical Machine, depending by the load
 float slopeBeforePoint[pm in physical_machines][p in 1..nb_points]=
-  (p == 1) ? 0 : (power_function[pm][p].y - power_function[pm][p-1].y)/(power_function[pm][p].x-power_function[pm][p-1].x);
-float static_energy[pm in physical_machines] = power_function[pm][1].y; 
+  (p == 1) ? 0 : (specific_power_function[pm][p].y - specific_power_function[pm][p-1].y)/(specific_power_function[pm][p].x-specific_power_function[pm][p-1].x);
+float static_energy[pm in physical_machines] = specific_power_function[pm][1].y; 
 pwlFunction dynamic_energy[pm in physical_machines] = 
-  piecewise (p in 1..nb_points){slopeBeforePoint[pm][p] -> power_function[pm][p].x; 0} (0, 0);
+  piecewise (p in 1..nb_points){slopeBeforePoint[pm][p] -> specific_power_function[pm][p].x; 0} (0, 0);
 
 // Decision Variables
 dvar boolean allocation[virtual_machines][physical_machines];
@@ -130,13 +94,13 @@ dexpr float additional_energy[pm in physical_machines] =
     dynamic_energy[pm](w_load_cpu * cpu_load[pm] + (1 - w_load_cpu) * memory_load[pm])
   - dynamic_energy[pm](w_load_cpu * pm.s.load.cpu + (1 - w_load_cpu) * pm.s.load.memory);
   
-float profit[vm in virtual_machines] = (vm.requested.cpu * price.cpu + vm.requested.memory * price.memory);                   
+float revenue[vm in virtual_machines] = (vm.requested.cpu * price.cpu + vm.requested.memory * price.memory);                   
 
 // Objective Function
-maximize   1000*sum(pm in physical_machines) ( 
-	         - PUE * energy.cost * (is_on[pm] * static_energy[pm] + additional_energy[pm])
+maximize   sum(pm in physical_machines) ( 
+	         - PUE * price.energy * (is_on[pm] * static_energy[pm] + additional_energy[pm])
 		     + sum (vm in virtual_machines) ( 
-        		   allocation[vm][pm] * profit[vm] / pm.features.speed
+        		   allocation[vm][pm] * revenue[vm]
 		  	   )
 		   );
 	   

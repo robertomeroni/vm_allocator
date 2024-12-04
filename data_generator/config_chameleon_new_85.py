@@ -1,4 +1,5 @@
 import os
+EQUAL_SPEED = True
 
 # Configuration for Physical Machines
 pm_config = {

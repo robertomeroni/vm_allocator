@@ -143,12 +143,6 @@ def migration_reallocate_vms(
     return is_migration, migrating_on_pms
 
 
-def deallocate_vms(active_vms):
-    for vm in active_vms.values():
-        if vm["allocation"]["pm"] != -1 and vm["allocation"]["current_time"] == 0:
-            vm["allocation"]["pm"] = -1
-
-
 def update_physical_machines_state(physical_machines, initial_physical_machines, is_on):
     turned_on_pms = []
     turned_off_pms = []
@@ -196,6 +190,15 @@ def get_vms_on_pm(active_vms, pm_id):
         or vm["migration"]["from_pm"] == pm_id
         or vm["migration"]["to_pm"] == pm_id
     }
+
+def get_vms_on_pms(active_vms, pm_ids):
+    vms_on_pms = {pm_id: [] for pm_id in pm_ids}
+    for vm in active_vms.values():
+        if vm["run"]["pm"] in pm_ids:
+            vms_on_pms[vm["run"]["pm"]].append(vm)
+        elif vm["allocation"]["pm"] in pm_ids:
+            vms_on_pms[vm["allocation"]["pm"]].append(vm)
+    return vms_on_pms
 
 
 def get_non_allocated_vms(active_vms):
@@ -291,7 +294,7 @@ def schedule_migration(
                     pm_copy["s"]["load"]["memory"] += memory_scheduled_load
 
                     print(
-                        f"VM {vm['id']} scheduled on PM {pm['id']} after VM {vm['id']} migration."
+                        f"VM {vm['id']} scheduled on PM {pm['id']} after VM {migrating_vm['id']} migration."
                     )
 
 

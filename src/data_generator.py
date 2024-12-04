@@ -1,5 +1,10 @@
 import numpy as np
-from weights import price, migration
+
+from config import INITIAL_PMS_FILE
+from utils import (convert_pms_to_model_input_format,
+                   convert_specific_power_function_to_model_input_format,
+                   load_pm_database)
+from weights import migration, price
 
 
 def generate_unique_id(existing_ids):
@@ -62,14 +67,14 @@ def generate_new_vms(new_vms_per_step, existing_ids, pattern="constant", step=0)
             requested_cpu = int(np.random.pareto(a=2.0) * 1)
             requested_cpu = min(max(requested_cpu, 1), 16)
             requested_memory = int(np.random.pareto(a=2.0) * 4)
-            requested_memory = min(max(requested_memory, 4), 64)
+            requested_memory = min(max(requested_memory, 4), 32)
         else:
             # Default resource requests
-            requested_cpu = np.random.choice([1, 2, 4, 8, 16])
-            requested_memory = np.random.choice([2, 4, 8, 16, 32, 64])
+            requested_cpu = np.random.choice([1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 4, 4, 8])
+            requested_memory = np.random.choice([1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 4, 4, 8, 8, 16])
 
         # Random total run time
-        run_total_time = np.random.uniform(30.0, 600.0)
+        run_total_time = np.random.uniform(30.0, 6000.0)
 
         # Calculate revenue based on requested resources
         revenue = (
@@ -77,9 +82,6 @@ def generate_new_vms(new_vms_per_step, existing_ids, pattern="constant", step=0)
         ) * run_total_time
 
         # Migration times calculations
-        revenue = (
-            requested_cpu * price["cpu"] + requested_memory * price["memory"]
-        ) * run_total_time
         migration_first_round_time = (
             requested_memory / migration["time"]["network_bandwidth"]
         )
@@ -90,6 +92,10 @@ def generate_new_vms(new_vms_per_step, existing_ids, pattern="constant", step=0)
             / migration["time"]["network_bandwidth"]
         )
         migration_total_time = migration_first_round_time + migration_down_time
+        migration_energy = (
+            migration["energy"]["coefficient"] * requested_memory
+            + migration["energy"]["constant"]
+        )
 
         new_vm = {
             "id": new_vm_id,
@@ -106,7 +112,9 @@ def generate_new_vms(new_vms_per_step, existing_ids, pattern="constant", step=0)
                 "down_time": migration_down_time,
                 "from_pm": -1,
                 "to_pm": -1,
+                "energy": migration_energy,
             },
+            "arrival_step": step,
             "revenue": revenue,
         }
 
@@ -114,3 +122,31 @@ def generate_new_vms(new_vms_per_step, existing_ids, pattern="constant", step=0)
         new_vms.append(new_vm)  # Add the new VM to the list
 
     return new_vms  # Return the list of new VMs
+
+
+def generate_pms(num_pms):
+    pm_database, _, _, specific_power_function_database = load_pm_database()
+    pms = {}
+    nb_points = 11
+
+    for pm_id in range(num_pms):
+        type = np.random.randint(0, len(pm_database))
+        pms[pm_id] = {"id": pm_id}
+        pms[pm_id].update(pm_database[type])
+
+    formatted_pms = convert_pms_to_model_input_format(pms)
+    formatted_specific_power_function = (
+        convert_specific_power_function_to_model_input_format(
+            pms, specific_power_function_database, nb_points
+        )
+    )
+
+    with open(INITIAL_PMS_FILE, "w") as pm_file:
+        pm_file.write(formatted_pms)
+        pm_file.write("\n\n")
+        pm_file.write(formatted_specific_power_function)
+
+    print(f"Physical machines data saved to {INITIAL_PMS_FILE}")
+
+if __name__ == "__main__":
+    generate_pms(1000)

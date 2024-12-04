@@ -7,6 +7,8 @@ from jinja2 import Environment, FileSystemLoader
 import plotly.express as px
 import plotly.io as pio
 
+
+from src.weights import pue, price, kWh_to_J
 # Set Plotly default template
 pio.templates.default = "plotly_dark"
 
@@ -14,9 +16,11 @@ pio.templates.default = "plotly_dark"
 parser = argparse.ArgumentParser(description='Analyze simulation results from a log file.')
 parser.add_argument('--file', required=True, help='Path to the log file containing simulation results.')
 parser.add_argument('--groupby', nargs='+', default=['MASTER_MODEL'], help='Parameters to group results by.')
+parser.add_argument('--synthetic', action='store_true', help='Analyze synthetic workload results.')
 args = parser.parse_args()
 grouping_vars = args.groupby
-output_folder = 'log_tests/html'
+groupby_workload = 'WORKLOAD_NAME' if not args.synthetic else 'NEW_VMS_PATTERN'
+output_folder = os.path.dirname(args.file)
 output_filename = os.path.basename(args.file).replace('.txt', '.html')
 
 
@@ -68,10 +72,10 @@ with open(args.file, 'r') as f:
                 num_time_steps = value.strip()
             elif num_time_steps != value.strip():
                 time_step = None
-        elif line.startswith('Time taken for this configuration:'):
+        elif line.startswith('Total Model Runtime:'):
             key, value = line.split(':', 1)
-            # Extract numeric part from the string
-            time_value = ''.join(filter(str.isdigit, value.strip()))
+            # Remove the 'seconds' text and any extra spaces
+            time_value = value.replace('seconds', '').strip()
             record['Time Taken (s)'] = float(time_value)
         elif line.startswith('Completed migrations:'):
             key, value = line.split(':', 1)
@@ -90,13 +94,25 @@ with open(args.file, 'r') as f:
             for part in parts:
                 metric, metric_value = part.strip().split(' ')
                 record[f'Avg PM {metric} Load'] = float(metric_value.strip().replace('%', ''))
+        elif line.startswith('Average wait time:'):
+            key, value = line.split(':', 1)
+            record['Avg Wait Time (steps)'] = float(value.strip())
+        elif line.startswith('Runtime efficiency:'):
+            key, value = line.split(':', 1)
+            record['Runtime Efficiency'] = float(value.strip())
+        elif line.startswith('Overall time efficiency:'):
+            key, value = line.split(':', 1)
+            record['Overall Time Efficiency'] = float(value.strip())
         elif line.startswith('Total Revenue:'):
             key, value = line.split(':', 1)
             value = value.strip().replace('$', '')
             record['Revenue'] = float(value)
-        elif line.startswith('Total PM Energy Cost:'):
+        elif line.startswith('Total PM Load Cost:'):
             key, value = line.split(':', 1)
-            record['PM Energy Cost'] = float(value.strip().replace('$', ''))
+            record['PM Load Cost'] = float(value.strip().replace('$', ''))
+        elif line.startswith('Total PM Switch Cost:'):
+            key, value = line.split(':', 1)
+            record['PM Switch Cost'] = float(value.strip().replace('$', ''))
         elif line.startswith('Total Migration Energy Cost:'):
             key, value = line.split(':', 1)
             record['Migration Energy Cost'] = float(value.strip().replace('$', ''))
@@ -128,31 +144,27 @@ df = pd.DataFrame(data)
 
 # Calculate additional metrics
 df['Profit Margin (%)'] = (df['Net Profit'] / df['Revenue']) * 100
+df['Total Energy Consumption (kWh)'] = df['Costs'] / ( pue * price["energy"] ) / kWh_to_J
+df['Energy Efficiency'] = df['Revenue'] / df['Costs']
 
 # Convert numeric columns to appropriate data types
 numeric_columns = [
     'Revenue', 'Costs', 'Net Profit',
-    'PM Energy Cost', 'Migration Energy Cost',
+    'PM Load Cost', 'PM Switch Cost', 'Migration Energy Cost',
     'Completed Migrations',
     'Max % PMs On', 'Avg PMs On', 'Total PMs',
     'Avg PM CPU Load', 'Avg PM Memory Load',
-    'Profit Margin (%)',
+    'Profit Margin (%)', 'Energy Efficiency',
+    'Avg Wait Time (steps)', 'Runtime Efficiency', 'Overall Time Efficiency',
     'SEED_NUMBER', 'NEW_VMS_PER_STEP', 'MAIN_MODEL_PERIOD', 'MINI_MODEL_PERIOD',
     'safety_margin', 'step_window_for_online_prediction', 'step_window_for_weights_accuracy',
     'w_concurrent_migrations', 'CPLEX_TIME_LIMIT_MAIN', 'CPLEX_OPTIMALITY_GAP_MAIN',
     'CPLEX_TIME_LIMIT_MINI', 'CPLEX_OPTIMALITY_GAP_MINI',
-    # Add other numeric config parameters as needed
 ]
 
 for col in numeric_columns:
     if col in df.columns:
         df[col] = pd.to_numeric(df[col], errors='coerce')
-
-# Convert boolean columns
-boolean_columns = ['USE_WORKLOAD_PREDICTOR', 'USE_FILTER', 'USE_RANDOM_SEED']
-for col in boolean_columns:
-    if col in df.columns:
-        df[col] = df[col].map({'True': True, 'False': False})
 
 # Ensure seaborn styles are applied
 sns.set_theme(style='whitegrid')
@@ -160,9 +172,9 @@ sns.set_theme(style='whitegrid')
 # Collect data for the HTML report
 workloads_data = []
 
-for workload in df['WORKLOAD_NAME'].unique():
-    print(f"\nProcessing Workload: {workload}")
-    df_workload = df[df['WORKLOAD_NAME'] == workload].copy()
+for workload in df[groupby_workload].unique():
+    print(f"\nProcessing {groupby_workload}: {workload}")
+    df_workload = df[df[groupby_workload] == workload].copy()
 
     # Combine grouping variables into a single 'Group' column in df_workload
     df_workload['Group'] = df_workload[grouping_vars].astype(str).agg(' | '.join, axis=1)
@@ -175,7 +187,8 @@ for workload in df['WORKLOAD_NAME'].unique():
         'Revenue': 'mean',
         'Costs': 'mean',
         'Net Profit': 'mean',
-        'PM Energy Cost': 'mean',
+        'PM Load Cost': 'mean',
+        'PM Switch Cost': 'mean',
         'Migration Energy Cost': 'mean',
         'Completed Migrations': 'mean',
         'Max % PMs On': 'mean',
@@ -183,8 +196,12 @@ for workload in df['WORKLOAD_NAME'].unique():
         'Avg PM CPU Load': 'mean',
         'Avg PM Memory Load': 'mean',
         'Profit Margin (%)': 'mean',
+        'Total Energy Consumption (kWh)': 'mean',
+        'Energy Efficiency': 'mean',
+        'Avg Wait Time (steps)': 'mean',
+        'Runtime Efficiency': 'mean',
+        'Overall Time Efficiency': 'mean',
         'Time Taken (s)': 'mean',
-        # Add other columns as needed
     }
     df_grouped = df_workload.groupby('Group', sort=False).agg(aggregation_functions).reset_index()
 
@@ -201,7 +218,8 @@ for workload in df['WORKLOAD_NAME'].unique():
             'Revenue': '${:,.2f}',
             'Costs': '${:,.2f}',
             'Net Profit': '${:,.2f}',
-            'PM Energy Cost': '${:,.2f}',
+            'PM Load Cost': '${:,.2f}',
+            'PM Switch Cost': '${:,.2f}',
             'Migration Energy Cost': '${:,.2f}',
             'Completed Migrations': '{:,.0f}',
             'Max % PMs On': '{:.2f}%',
@@ -209,12 +227,17 @@ for workload in df['WORKLOAD_NAME'].unique():
             'Avg PM CPU Load': '{:.2f}%',
             'Avg PM Memory Load': '{:.2f}%',
             'Profit Margin (%)': '{:.2f}%',
+            'Total Energy Consumption (kWh)': '{:.2f} kWh',
+            'Energy Efficiency': '{:.2f}',
+            'Avg Wait Time (steps)': '{:.2f}',
+            'Runtime Efficiency': '{:.2f}',
+            'Overall Time Efficiency': '{:.2f}',
             'Time Taken (s)': '{:,.0f} s'
         })\
         .background_gradient(cmap='RdYlGn', subset=['Net Profit'])\
         .bar(subset=['Completed Migrations'], color='lightgreen')\
         .set_table_attributes('class="table table-striped table-hover"')\
-        .set_caption(f'Analysis for Workload: {workload}')
+        .set_caption(f'Analysis for {groupby_workload}: {workload}')
 
     # Get the HTML representation of the styled DataFrame
     html_table = styled_df.to_html()
@@ -222,49 +245,60 @@ for workload in df['WORKLOAD_NAME'].unique():
     # Generate interactive Plotly plots and get their HTML
     plots_html = []
 
-    # Financial Metrics Plot
+    # Total Costs Plot with narrower bars
     fig = px.bar(
         df_grouped,
         x='Group',
-        y=['Revenue', 'Costs', 'Net Profit'],
-        title=f"Financial Metrics for {workload}",
-        barmode='group',
-        labels={'value': 'Amount ($)', 'variable': 'Metric', 'Group': 'Group'}
+        y='Costs',
+        title=f"Total Costs for {groupby_workload}: {workload}",
+        labels={'Costs': 'Total Costs ($)', 'Group': 'Group'},
+        width=800,  # Adjust the width of the plot
+        height=400  # Adjust the height of the plot
     )
+    fig.update_traces(width=0.4)  # Set the width of the bars
     fig.update_xaxes(categoryorder='array', categoryarray=group_order)
     plots_html.append(fig.to_html(full_html=False, include_plotlyjs=False))
 
-    # Profit Margin Plot
-    fig = px.bar(
-        df_grouped,
-        x='Group',
-        y='Profit Margin (%)',
-        title=f"Profit Margin Percentage for {workload}",
-        labels={'Profit Margin (%)': 'Profit Margin (%)', 'Group': 'Group'}
-    )
-    fig.update_xaxes(categoryorder='array', categoryarray=group_order)
-    plots_html.append(fig.to_html(full_html=False, include_plotlyjs=False))
-
-    # Average PM Loads Plot
-    fig = px.bar(
-        df_grouped,
-        x='Group',
-        y=['Avg PM CPU Load', 'Avg PM Memory Load'],
-        title=f"Average PM Resource Loads for {workload}",
-        barmode='group',
-        labels={'value': 'Load (%)', 'variable': 'Resource', 'Group': 'Group'}
-    )
-    fig.update_xaxes(categoryorder='array', categoryarray=group_order)
-    plots_html.append(fig.to_html(full_html=False, include_plotlyjs=False))
-
-    # Completed Migrations Plot
+    # Completed Migrations Plot with narrower bars
     fig = px.bar(
         df_grouped,
         x='Group',
         y='Completed Migrations',
-        title=f"Completed Migrations for {workload}",
-        labels={'Completed Migrations': 'Number of Migrations', 'Group': 'Group'}
+        title=f"Completed Migrations for {groupby_workload}: {workload}",
+        labels={'Completed Migrations': 'Number of Migrations', 'Group': 'Group'},
+        width=800,  # Adjust the width of the plot
+        height=400  # Adjust the height of the plot
     )
+    fig.update_traces(width=0.4)  # Set the width of the bars
+    fig.update_xaxes(categoryorder='array', categoryarray=group_order)
+    plots_html.append(fig.to_html(full_html=False, include_plotlyjs=False))
+
+    # Average Loads Plot with narrower bars
+    fig = px.bar(
+        df_grouped,
+        x='Group',
+        y=['Avg PM CPU Load', 'Avg PM Memory Load'],
+        title=f"Average PM Loads for {groupby_workload}: {workload}",
+        barmode='group',
+        labels={'value': 'Load (%)', 'variable': 'Load Type', 'Group': 'Group'},
+        width=800,  # Adjust the width of the plot
+        height=400  # Adjust the height of the plot
+    )
+    fig.update_traces(width=0.2)  # Set the width of the bars
+    fig.update_xaxes(categoryorder='array', categoryarray=group_order)
+    plots_html.append(fig.to_html(full_html=False, include_plotlyjs=False))
+
+    # Average Number of PMs On Plot with narrower bars
+    fig = px.bar(
+        df_grouped,
+        x='Group',
+        y='Avg PMs On',
+        title=f"Average Number of PMs On for {groupby_workload}: {workload}",
+        labels={'Avg PMs On': 'Average PMs On', 'Group': 'Group'},
+        width=800,  # Adjust the width of the plot
+        height=400  # Adjust the height of the plot
+    )
+    fig.update_traces(width=0.4)  # Set the width of the bars
     fig.update_xaxes(categoryorder='array', categoryarray=group_order)
     plots_html.append(fig.to_html(full_html=False, include_plotlyjs=False))
 
@@ -274,6 +308,17 @@ for workload in df['WORKLOAD_NAME'].unique():
         'table': html_table,
         'plots': plots_html
     })
+
+    # Performance Metrics Plot
+    fig = px.bar(
+        df_grouped,
+        x='Group',
+        y=['Avg Wait Time (steps)', 'Runtime Efficiency', 'Overall Time Efficiency'],
+        title=f"Performance Metrics for {groupby_workload}: {workload}",
+        labels={'value': 'Metric', 'variable': 'Metric Type', 'Group': 'Group'},
+        width=800,  # Adjust the width of the plot
+        height=400  # Adjust the height of the plot
+    )
 
 # Set up Jinja2 environment
 env = Environment(loader=FileSystemLoader('.'))

@@ -1,12 +1,9 @@
 import os
 import re
 
-from utils import (
-    convert_vms_to_model_input_format,
-    convert_pms_to_model_input_format,
-    convert_power_function_to_model_input_format,
-    parse_matrix,
-)
+from utils import (convert_pms_to_model_input_format,
+                   convert_specific_power_function_to_model_input_format,
+                   convert_vms_to_model_input_format, parse_matrix)
 
 try:
     profile  # type: ignore
@@ -18,7 +15,7 @@ except NameError:
 
 @profile
 def save_mini_model_input_format(
-    vms, pms, step, model_input_folder_path, power_function_dict, nb_points
+    vms, pms, step, model_input_folder_path, specific_power_function_database, nb_points
 ):
     # Ensure the directory exists
     os.makedirs(model_input_folder_path, exist_ok=True)
@@ -35,18 +32,20 @@ def save_mini_model_input_format(
     # Convert data to the required format
     formatted_vms = convert_vms_to_model_input_format(vms)
     formatted_pms = convert_pms_to_model_input_format(pms)
-    formatted_power_function = convert_power_function_to_model_input_format(
-        pms, power_function_dict, nb_points
+    formatted_specific_power_function = (
+        convert_specific_power_function_to_model_input_format(
+            pms, specific_power_function_database, nb_points
+        )
     )
 
     # Write formatted VMs to file
     with open(vm_model_input_file_path, "w") as vm_file:
         vm_file.write(formatted_vms)
 
-    # Write formatted PMs and power function to file
+    # Write formatted PMs and specific_power function to file
     with open(pm_model_input_file_path, "w") as pm_file:
         pm_file.write(formatted_pms)
-        pm_file.write(formatted_power_function)
+        pm_file.write(formatted_specific_power_function)
 
     return vm_model_input_file_path, pm_model_input_file_path
 

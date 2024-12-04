@@ -1,10 +1,11 @@
 import os
 
+EQUAL_SPEED = False
+
 # Configuration for Physical Machines
 pm_config = {
     "cpu_capacity": [16, 24, 32, 40, 48, 56, 64],  # Available CPU capacities in cores
     "memory_capacity": [32, 64, 128],  # Available memory capacities in GB
-    "speed_range": (1, 1),  # Speed range for the machines
     "time_to_turn_on_range": (15.0, 60.0),  # Time to turn on range in seconds
     "time_to_turn_off_range": (10.0, 30.0),  # Time to turn off range in seconds
     "state_percentage": 0,  # Percentage of physical machines that are ON initially
@@ -25,11 +26,8 @@ migration = {
         "resume_vm_on_target": 20.0 / 10**3,  # in seconds
     },
     "energy": {
-        "cpu_overhead": {
-            "source": 0.015,
-            "target": 0.017,
-        },
-        "concurrent": 0.016,
+        "coefficient": 0.512,
+        "intercept": 20.165
     },
 }
 
@@ -48,7 +46,6 @@ data_folder_path = os.path.join(base_path, "model/data")
 # Convenience Aliases for Easy Access
 pm_cpu_capacity = pm_config["cpu_capacity"]
 pm_memory_capacity = pm_config["memory_capacity"]
-pm_speed_range = pm_config["speed_range"]
 pm_time_to_turn_on_range = pm_config["time_to_turn_on_range"]
 pm_time_to_turn_off_range = pm_config["time_to_turn_off_range"]
 state_percentage = pm_config["state_percentage"]

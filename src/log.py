@@ -1,11 +1,12 @@
-import os
 import csv
-import json
 import datetime
+import math
+import os
+
 from colorama import Fore, Style, init
-from config import SAVE_LOGS, LOGS_FOLDER_PATH
 
 from check import check_status_changes
+from config import LOGS_FOLDER_PATH
 
 try:
     profile  # type: ignore
@@ -24,7 +25,10 @@ def create_log_folder():
     log_folder_name = f"log_{date_time_string}"
     log_folder_path = os.path.join(LOGS_FOLDER_PATH, log_folder_name)
     os.makedirs(log_folder_path, exist_ok=True)
-    return log_folder_path
+
+    performance_log_file = os.path.join(log_folder_path, "performance.csv")
+    vm_execution_time_file = os.path.join(log_folder_path, "runtime_vms.csv")
+    return log_folder_path, performance_log_file, vm_execution_time_file
 
 
 def log_initial_physical_machines(pms, log_folder_path):
@@ -33,95 +37,27 @@ def log_initial_physical_machines(pms, log_folder_path):
         log_file.write("Initial Physical Machines:\n")
         for pm_id, pm in pms.items():
             log_file.write(
-                f"  PM ID: {pm_id}, CPU Capacity: {pm['capacity']['cpu']}, Memory Capacity: {pm['capacity']['memory']}, Speed: {pm['features']['speed']}, Time to Turn On: {pm['s']['time_to_turn_on']}, Time to Turn Off: {pm['s']['time_to_turn_off']}, State: {pm['s']['state']}\n"
+                f"  PM ID: {pm_id}, CPU Capacity: {pm['capacity']['cpu']}, Memory Capacity: {pm['capacity']['memory']}, Time to Turn On: {pm['s']['time_to_turn_on']}, Time to Turn Off: {pm['s']['time_to_turn_off']}, State: {pm['s']['state']}, Type: {pm['type']}\n"
             )
     return log_folder_path
 
 
 def log_performance(
-    step, model, time_taken, valid, num_vms, num_pms, performance_log_file
+    step, model, time_taken, valid_str, num_vms, num_pms, performance_log_file
 ):
-    if model == "pm_manager":
-        if valid:
-            output = ""
-        else:
-            output = "no allocation"
-    elif model == "migration":
-        if valid:
-            output = "success"
-        else:
-            output = "fail"
-    else:
-        if valid:
-            output = ""
-        else:
-            output = "not valid"
 
     with open(performance_log_file, "a", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow([step, model, time_taken, output, num_vms, num_pms])
+        writer.writerow([step, model, time_taken, valid_str, num_vms, num_pms])
 
-
-def log_migrations(
-    active_vms,
-    count_migrations,
-    terminated_vms_in_step,
-    log_folder_path,
-    step,
-    final_step,
-):
-    file_path = os.path.join(log_folder_path, "count_migrations.json")
-
-    for vm in active_vms.values():
-        if (
-            vm["migration"]["from_pm"] != -1
-            and vm["migration"]["to_pm"] != -1
-            and vm["migration"]["current_time"] == 0
-        ):
-            if vm["id"] not in count_migrations:
-                count_migrations[vm["id"]] = {}
-                count_migrations[vm["id"]]["count"] = 0
-                count_migrations[vm["id"]]["steps"] = []
-            count_migrations[vm["id"]]["count"] += 1
-            count_migrations[vm["id"]]["steps"].append(step)
-
-    if step >= final_step:
-        for vm_id in active_vms:
-            if vm_id not in count_migrations:
-                continue
-            if os.path.exists(file_path):
-                with open(file_path, "r") as file:
-                    try:
-                        data = json.load(file)
-                    except json.JSONDecodeError:
-                        data = {}
-            else:
-                data = {}
-
-            # Update the data with the new migration count
-            data[vm_id] = count_migrations[vm_id]
-
-            # Save the updated data back to the JSON file
-            with open(file_path, "w") as file:
-                json.dump(data, file, indent=4)
-    else:
-        for vm in terminated_vms_in_step:
-            if vm["id"] in count_migrations:
-                if os.path.exists(file_path):
-                    with open(file_path, "r") as file:
-                        try:
-                            data = json.load(file)
-                        except json.JSONDecodeError:
-                            data = {}
-                else:
-                    data = {}
-
-                # Update the data with the new migration count
-                data[vm["id"]] = count_migrations[vm["id"]]
-
-                # Save the updated data back to the JSON file
-                with open(file_path, "w") as file:
-                    json.dump(data, file, indent=4)
+def log_vm_execution_time(vm, vm_execution_time_file, time_step):
+    wait_time = vm["allocation_step"] - vm["arrival_step"]
+    expected_runtime = math.ceil(vm["run"]["total_time"] / time_step)
+    real_runtime = vm["termination_step"] - vm["allocation_step"]
+    total_time = vm["termination_step"] - vm["arrival_step"]
+    with open(vm_execution_time_file, "a", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow([vm["id"], wait_time, expected_runtime, real_runtime, total_time])
 
 
 @profile
@@ -138,6 +74,7 @@ def log_allocation(
     total_costs,
     print_to_console=True,
     log_folder_path=None,
+    save_logs=True,
     previous_state={},
 ):
     if not previous_state:
@@ -507,7 +444,7 @@ def log_allocation(
             previous_state[vm_id] = "non-assigned"
 
     # Save log to file (without colors and bold formatting)
-    if SAVE_LOGS:
+    if save_logs:
         log_file_path = os.path.join(log_folder_path, f"step_{step}.log")
         with open(log_file_path, "w") as log_file:
             log_file.write("\n".join(log_lines))
@@ -520,8 +457,9 @@ def log_allocation(
 def log_final_net_profit(
     total_revenue,
     total_costs,
-    total_pm_energy_cost,
-    total_migration_energy_cost,
+    total_pm_switch_costs,
+    total_pm_load_costs,
+    total_migration_costs,
     num_completed_migrations,
     max_percentage_of_pms_on,
     total_cpu_load,
@@ -530,14 +468,18 @@ def log_final_net_profit(
     num_pms,
     non_valid_entries,
     total_entries,
+    avg_wait_time,
+    runtime_efficiency,
+    overall_time_efficiency,
+    total_model_runtime,
     log_folder_path,
     master_model,
     use_random_seed,
-    SEED_NUMBER,
     time_step,
     num_steps,
     use_real_data,
     WORKLOAD_NAME,
+    NEW_VMS_PATTERN,
 ):
     net_profit = total_revenue - total_costs
 
@@ -557,10 +499,9 @@ def log_final_net_profit(
 
     final_net_profit_message = f"Final Net Profit: ${net_profit:.6f}"
 
-    total_pm_energy_cost_message = f"Total PM Energy Cost: ${total_pm_energy_cost:.6f}"
-    total_migration_energy_cost_message = (
-        f"Total Migration Energy Cost: ${total_migration_energy_cost:.6f}"
-    )
+    total_pm_load_cost_message = f"Total PM Load Cost: ${total_pm_load_costs:.6f}"
+    total_pm_switch_cost_message = f"Total PM Switch Cost: ${total_pm_switch_costs:.6f}"
+    total_migration_cost_message = f"Total Migration Cost: ${total_migration_costs:.6f}"
     completed_migrations_message = f"Completed migrations: {num_completed_migrations}"
     avg_pms_on_message = f"Average number of PMs on: {avg_pms_on}/{num_pms}"
     max_percentage_of_pms_on_message = (
@@ -569,12 +510,18 @@ def log_final_net_profit(
     avg_pm_loads_message = (
         f"Average PM loads: CPU {avg_cpu_load:.2f}%, Memory {avg_memory_load:.2f}%"
     )
+    avg_wait_time_message = f"Average Wait Time: {avg_wait_time:.2f}"
+    runtime_efficiency_message = f"Runtime Efficiency: {runtime_efficiency:.2f}"
+    overall_time_efficiency_message = f"Overall Time Efficiency: {overall_time_efficiency:.2f}"
     time_step_message = f"Time Step: {time_step}"
     num_steps_message = f"Number of Time Steps: {num_steps}"
     total_revenue_message = (
         f"Total Revenue Gained from Completed VMs: ${total_revenue:.6f}"
     )
     total_costs_message = f"Total Costs Incurred: ${total_costs:.6f}"
+    total_model_runtime_message = (
+        f"Total Model Runtime: {total_model_runtime:.2f} seconds"
+    )
 
     if total_entries > 0:
         non_valid_entries_message = f"Non-valid entries: {non_valid_entries}/{total_entries} ({(non_valid_entries / total_entries * 100):.2f}%)"
@@ -586,42 +533,51 @@ def log_final_net_profit(
     )
     print(total_revenue_message)
     print(total_costs_message)
-    print(total_pm_energy_cost_message)
-    print(total_migration_energy_cost_message)
+    print(total_pm_load_cost_message)
+    print(total_pm_switch_cost_message)
+    print(total_migration_cost_message)
     print(completed_migrations_message)
     print(avg_pms_on_message)
     print(max_percentage_of_pms_on_message)
     print(avg_pm_loads_message)
     print(non_valid_entries_message)
+    print(avg_wait_time_message)
+    print(runtime_efficiency_message)
+    print(overall_time_efficiency_message)
+    print(total_model_runtime_message)
 
     # Save to log file (without colors)
-    if SAVE_LOGS:
-        log_file_path = os.path.join(log_folder_path, "final_net_profit.log")
-        with open(log_file_path, "a") as log_file:
+    log_file_path = os.path.join(log_folder_path, "final_net_profit.log")
+    with open(log_file_path, "a") as log_file:
 
-            if master_model:
-                model_message = f"Master Model: {master_model}"
-                log_file.write(model_message + "\n")
+        if master_model:
+            model_message = f"Master Model: {master_model}"
+            log_file.write(model_message + "\n")
 
-            if use_real_data:
-                trace_message = f"Trace: {WORKLOAD_NAME}"
-                log_file.write(trace_message + "\n")
-            elif use_random_seed:
-                seed_message = f"Random Seed Number: {SEED_NUMBER}"
-                log_file.write(seed_message + "\n")
+        if use_real_data:
+            trace_message = f"Trace: {WORKLOAD_NAME}"
+            log_file.write(trace_message + "\n")
+        elif use_random_seed:
+            generation_pattern_message = f"Generation Pattern: {NEW_VMS_PATTERN}"
+            log_file.write(generation_pattern_message + "\n")
 
-            log_file.write(time_step_message + "\n")
-            log_file.write(num_steps_message + "\n")
-            log_file.write(non_valid_entries_message + "\n")
-            log_file.write("=============================\n")
-            log_file.write(total_revenue_message + "\n")
-            log_file.write(total_costs_message + "\n")
-            log_file.write(total_pm_energy_cost_message + "\n")
-            log_file.write(total_migration_energy_cost_message + "\n")
-            log_file.write("------------------------------------------\n")
-            log_file.write(completed_migrations_message + "\n")
-            log_file.write(avg_pms_on_message + "\n")
-            log_file.write(max_percentage_of_pms_on_message + "\n")
-            log_file.write(avg_pm_loads_message + "\n")
-            log_file.write("------------------------------------------\n")
-            log_file.write(final_net_profit_message + "\n")
+        log_file.write(time_step_message + "\n")
+        log_file.write(num_steps_message + "\n")
+        log_file.write(non_valid_entries_message + "\n")
+        log_file.write(avg_wait_time_message + "\n")
+        log_file.write(runtime_efficiency_message + "\n")
+        log_file.write(overall_time_efficiency_message + "\n")
+        log_file.write(total_model_runtime_message + "\n")
+        log_file.write("=============================\n")
+        log_file.write(total_revenue_message + "\n")
+        log_file.write(total_costs_message + "\n")
+        log_file.write(total_pm_load_cost_message + "\n")
+        log_file.write(total_pm_switch_cost_message + "\n")
+        log_file.write(total_migration_cost_message + "\n")
+        log_file.write("------------------------------------------\n")
+        log_file.write(completed_migrations_message + "\n")
+        log_file.write(avg_pms_on_message + "\n")
+        log_file.write(max_percentage_of_pms_on_message + "\n")
+        log_file.write(avg_pm_loads_message + "\n")
+        log_file.write("------------------------------------------\n")
+        log_file.write(final_net_profit_message + "\n")

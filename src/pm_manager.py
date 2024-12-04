@@ -1,16 +1,12 @@
 import os
 import time
 
-from allocation import (
-    get_non_allocated_workload,
-    get_pms_on_schedule,
-    run_opl_model,
-    update_physical_machines_load,
-)
-from mini import save_mini_model_input_format, parse_mini_opl_output
-from log import log_performance
-from filter import split_dict_randomly, split_dict_sorted, sort_key_capacity
+from allocation import (get_non_allocated_workload, get_pms_on_schedule,
+                        run_opl_model)
 from config import PM_MANAGER_INPUT_FOLDER_PATH, PM_MANAGER_OUTPUT_FOLDER_PATH
+from filter import sort_key_specific_power_capacity, split_dict_sorted
+from log import log_performance
+from mini import parse_mini_opl_output, save_mini_model_input_format
 
 try:
     profile  # type: ignore
@@ -51,7 +47,7 @@ def pm_manager(
     non_allocated_vms,
     physical_machines_off,
     step,
-    power_function_dict,
+    specific_power_function_database,
     nb_points,
     performance_log_file,
     is_on,
@@ -59,7 +55,6 @@ def pm_manager(
     pm_manager_input_folder_path=PM_MANAGER_INPUT_FOLDER_PATH,
     pm_manager_output_folder_path=PM_MANAGER_OUTPUT_FOLDER_PATH,
 ):
-    vm_allocated = False
 
     # Convert into model input format
     mini_vm_model_input_file_path, mini_pm_model_input_file_path = (
@@ -68,7 +63,7 @@ def pm_manager(
             physical_machines_off,
             step,
             pm_manager_input_folder_path,
-            power_function_dict,
+            specific_power_function_database,
             nb_points,
         )
     )
@@ -102,19 +97,21 @@ def pm_manager(
         time_step,
     )
     if num_vms != len(non_allocated_vms):
-        vm_allocated = True
+        valid_str = ""
+    else:
+        valid_str = "no allocation"
 
     log_performance(
         step,
         "pm_manager",
         end_time_opl - start_time_opl,
-        vm_allocated,
+        valid_str,
         num_vms,
         num_pms,
         performance_log_file,
     )
 
-    return vms_to_deallocate_in_subset, vm_allocated
+    return vms_to_deallocate_in_subset
 
 
 @profile
@@ -124,7 +121,7 @@ def launch_pm_manager(
     is_on,
     step,
     time_step,
-    power_function_dict,
+    specific_power_function_database,
     nb_points,
     scheduled_vms,
     pms_to_turn_off_after_migration,
@@ -132,7 +129,6 @@ def launch_pm_manager(
     input_folder_path=PM_MANAGER_INPUT_FOLDER_PATH,
     output_folder_path=PM_MANAGER_OUTPUT_FOLDER_PATH,
     pm_manager_max_pms=None,
-    split_pm_method="sorted_by_capacity",
 ):
     # Get non-allocated VMs
     non_allocated_vms = get_non_allocated_workload(active_vms, scheduled_vms)
@@ -170,19 +166,32 @@ def launch_pm_manager(
 
         # Determine PM subset
         if pm_manager_max_pms and len(physical_machines_off) > pm_manager_max_pms:
-            if split_pm_method == "sorted_by_capacity":
-                physical_machines_off_subsets = split_dict_sorted(
-                    physical_machines_off, pm_manager_max_pms, sort_key_capacity
-                )
-            else:
-                physical_machines_off_subsets = split_dict_randomly(
-                    physical_machines_off, pm_manager_max_pms
-                )
+            physical_machines_off_subsets = split_dict_sorted(
+                physical_machines_off,
+                pm_manager_max_pms,
+                sort_key_specific_power_capacity,
+                specific_power_function_database,
+            )
         else:
             physical_machines_off_subsets = [physical_machines_off]
 
+        num_non_allocated_vms = 0
+
         for index, pm_subset in enumerate(physical_machines_off_subsets):
-            if non_allocated_vms:
+            # If no new VMs were allocated, include immediately bigger PMs
+            if num_non_allocated_vms == len(non_allocated_vms):
+                min_vm_cpu = min(vm["requested"]["cpu"] for vm in non_allocated_vms.values())
+                min_vm_memory = min(vm["requested"]["memory"] for vm in non_allocated_vms.values())
+                # If in the next subset there is no PM that can host the smallest VM, skip this subset
+                if not any(
+                    pm["capacity"]["cpu"] >= min_vm_cpu and
+                    pm["capacity"]["memory"] >= min_vm_memory
+                    for pm in pm_subset.values()
+                ):
+                    continue  # Skip this subset if no PM can host the smallest VM
+
+            num_non_allocated_vms = len(non_allocated_vms)
+            if num_non_allocated_vms:
                 pm_manager_input_folder_path = os.path.join(
                     input_folder_path, f"step_{step}/subset_{index}"
                 )
@@ -194,11 +203,11 @@ def launch_pm_manager(
                 os.makedirs(pm_manager_output_folder_path, exist_ok=True)
 
                 # Call the scaling manager
-                vms_to_deallocate_in_subset, vm_allocated = pm_manager(
+                vms_to_deallocate_in_subset = pm_manager(
                     non_allocated_vms,
                     pm_subset,
                     step,
-                    power_function_dict,
+                    specific_power_function_database,
                     nb_points,
                     performance_log_file,
                     is_on,
@@ -207,8 +216,7 @@ def launch_pm_manager(
                     pm_manager_output_folder_path,
                 )
                 vms_to_deallocate.extend(vms_to_deallocate_in_subset)
-                if vm_allocated and split_pm_method == "sorted_by_capacity":
-                    break
+
             else:
                 break
 

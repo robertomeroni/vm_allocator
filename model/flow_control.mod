@@ -7,11 +7,6 @@ main {
     var inputFolderPath = "simulation/model_input_main/";
     var modelFile = "vm_allocation.mod";
   }    
-  if (model_name == "main_simple") {
-  	writeln("\nMAIN MODEL SIMPLE\n")
-    var inputFolderPath = "simulation/model_input_main/";
-    var modelFile = "vm_allocation_simple.mod";
-  }    
   else if (model_name == "mini") {
   	writeln("\nMINI MODEL\n")
     var inputFolderPath = "simulation/model_input_mini/";
@@ -54,7 +49,24 @@ main {
   model.addDataSource(weights);
   
   model.generate();
-
+  
+    // Set initial solution
+  if (model_name == "main") {
+  	writeln("\nSetting initial solution...\n")
+  	
+  	var is_allocation_vec = new IloOplCplexVectors();
+  	var is_first_migration_vec = new IloOplCplexVectors();
+  	var is_run_vec = new IloOplCplexVectors();
+  	
+    is_allocation_vec.attach(model.is_allocation,model.is_allocation_init);
+    is_first_migration_vec.attach(model.is_first_migration,model.is_first_migration_init);
+    is_run_vec.attach(model.is_run,model.was_running);
+    
+    is_allocation_vec.setStart(cplex);   
+    is_first_migration_vec.setStart(cplex);   
+    is_run_vec.setStart(cplex);   
+  }    
+  
   if (cplex.solve()) {
     
     writeln(model.printSolution());

@@ -26,10 +26,6 @@ while [[ $# -gt 0 ]]; do
       PROFILE=1
       shift    # Shift past the flag
       ;;
-    --debug)
-      DEBUG=1
-      shift    # Shift past the flag
-      ;;
     -*)
       echo "Invalid option: $1" >&2
       exit 1
@@ -120,48 +116,31 @@ launch_simulation() {
         # Inspect the profiling results
         python3 -m line_profiler -rmt "$profile_folder/$profile_file"
     else
-        if [ "$DEBUG" -eq 1 ]; then
-            # Launch main.py with debug
-            cd /home/roberto/job/vm_allocator ; /usr/bin/env /home/roberto/job/vm_allocator/.venv/bin/python /home/roberto/.cursor/extensions/ms-python.debugpy-2024.6.0-linux-x64/bundled/libs/debugpy/adapter/../../debugpy/launcher 42983 -- /home/roberto/job/vm_allocator/src/main.py 
-        else
-            # Launch main.py normally
-            python3 src/main.py --config "$CONFIG_FILE" --trace "$TRACE_FILE"
-        fi
+        # Launch main.py normally
+        python3 src/main.py --config "$CONFIG_FILE" --trace "$TRACE_FILE"
     fi
 }
 
 # Use the number of PMs from the -P flag if provided, otherwise ask the user
 if [ "$NUM_PMS" -gt 0 ]; then
-    # Launch the data generator with the user-provided input
-    echo "Launching data generator with $NUM_PMS physical machines..."
-    python3 data_generator/data_generator.py --simulation "$NUM_PMS" "$INITIAL_PMS_FILE"
-    echo "Launching simulation..."
-    launch_simulation
+    echo "Generating $NUM_PMS physical machines..."
+    python3 src/main.py --config "$CONFIG_FILE" --trace "$TRACE_FILE" --generate-pms "$NUM_PMS"
 else 
     if [ -f "$INITIAL_PMS_FILE" ]; then
         echo "Initial PM file found: $INITIAL_PMS_FILE"
         launch_simulation
     else
-        if [ -f "data_generator/data_generator.py" ]; then
-            echo "Initial PM file not found at $INITIAL_PMS_FILE."
-            echo -n "How many physical machines do you want to simulate? "
-            read num_pms
+        echo "Initial PM file not found at $INITIAL_PMS_FILE."
+        echo -n "How many physical machines do you want to simulate? "
+        read num_pms
 
-            if ! [[ "$num_pms" =~ ^[0-9]+$ ]]; then
-                echo "Error: Please enter a valid number of physical machines."
-                exit 1
-            fi
-
-            # Get the directory of the INITIAL_PMS_FILE
-            DATA_FOLDER=$(dirname "$INITIAL_PMS_FILE")
-
-            # Launch the data generator with the user-provided input
-            echo "Launching data generator with $num_pms physical machines..."
-            python3 data_generator/data_generator.py --simulation "$num_pms" "$INITIAL_PMS_FILE"
-            launch_simulation
-        else
-            echo "Error: Initial PM file and data generator script not found."
+        if ! [[ "$num_pms" =~ ^[0-9]+$ ]]; then
+            echo "Error: Please enter a valid number of physical machines."
             exit 1
         fi
+
+        # Launch the data generator with the user-provided input
+        echo "Generating $num_pms physical machines..."
+        python3 src/main.py --config "$CONFIG_FILE" --trace "$TRACE_FILE" --generate-pms "$num_pms"
     fi
 fi

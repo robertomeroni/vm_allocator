@@ -1,7 +1,15 @@
-import random
 import heapq
+from math import sqrt
+from itertools import islice
+from weights import EPSILON
 
-EPSILON = 0.00001
+
+try:
+    profile  # type: ignore
+except NameError:
+
+    def profile(func):
+        return func
 
 
 def filter_full_pms_dict(physical_machines):
@@ -24,20 +32,28 @@ def is_pm_full(pm):
         or pm["s"]["load"]["memory"] >= 1 - EPSILON
     )
 
+def filter_migrating_pms(active_vms, physical_machines):
+    # Collect PM IDs with ongoing migrations
+    pms_with_ongoing_migrations = set()
+    for vm in active_vms.values():
+        if vm["migration"]["to_pm"] != -1:
+            pms_with_ongoing_migrations.add(vm["migration"]["to_pm"])
+        if vm["migration"]["from_pm"] != -1:
+            pms_with_ongoing_migrations.add(vm["migration"]["from_pm"])
+    
+    for pm_id in pms_with_ongoing_migrations:
+        if pm_id in physical_machines:
+            del physical_machines[pm_id]
 
+@profile
 def filter_full_and_migrating_pms(active_vms, physical_machines):
     # Collect PM IDs with ongoing migrations
-    pms_with_ongoing_migrations = {
-        vm["migration"]["to_pm"]
-        for vm in active_vms.values()
-        if vm["migration"]["to_pm"] != -1
-    }.union(
-        {
-            vm["migration"]["from_pm"]
-            for vm in active_vms.values()
-            if vm["migration"]["from_pm"] != -1
-        }
-    )
+    pms_with_ongoing_migrations = set()
+    for vm in active_vms.values():
+        if vm["migration"]["to_pm"] != -1:
+            pms_with_ongoing_migrations.add(vm["migration"]["to_pm"])
+        if vm["migration"]["from_pm"] != -1:
+            pms_with_ongoing_migrations.add(vm["migration"]["from_pm"])
 
     # Create a list of PM IDs to remove
     pm_ids_to_remove = [
@@ -58,11 +74,10 @@ def filter_fragmented_pms(physical_machines, limit=100):
         highest_fragmentation_pms = heapq.nlargest(
             limit, physical_machines.values(), key=sort_key_load
         )
-        keep_ids = {pm["id"] for pm in highest_fragmentation_pms}
-
-        for pm_id in list(physical_machines.keys()):
-            if pm_id not in keep_ids:
-                del physical_machines[pm_id]
+        
+        return {pm["id"]: pm for pm in highest_fragmentation_pms}
+    else:
+        return physical_machines
 
 
 def filter_pms_to_turn_off_after_migration(
@@ -94,7 +109,7 @@ def filter_vms_on_pms(vms, physical_machines):
     return filtered_vms
 
 
-def filter_vms_on_pms_and_non_allocated(vms, physical_machines):
+def filter_vms_on_pms_and_non_allocated(vms, physical_machines, scheduled_vms):
     pm_ids = set(physical_machines.keys())
     filtered_vms = {}
 
@@ -118,6 +133,11 @@ def filter_vms_on_pms_and_non_allocated(vms, physical_machines):
         ):
             filtered_vms[vm_id] = vm
 
+    for vm_list in scheduled_vms.values():
+        for scheduled_vm in vm_list:
+            if scheduled_vm["id"] in filtered_vms:
+                del filtered_vms[scheduled_vm["id"]]
+                
     return filtered_vms
 
 
@@ -128,11 +148,10 @@ def get_fragmented_pms_list(physical_machines, limit=100):
         return list(physical_machines.values())
 
 
-def sort_key_capacity(pm):
+def sort_key_specific_power_capacity(pm, specific_power_function_database):
     return (
-        -pm["features"]["speed"],
-        -pm["capacity"]["cpu"],
-        -pm["capacity"]["memory"],
+        specific_power_function_database[pm["type"]]["0.0"], 
+        sqrt(pm["capacity"]["cpu"] ** 2 + pm["capacity"]["memory"] ** 2),
         pm["s"]["time_to_turn_on"],
     )
 
@@ -144,39 +163,38 @@ def sort_key_load(pm):
     )
 
 
-def split_dict_sorted(d, max_elements_per_subset, sort_key):
-    n = len(d)
-    num_subsets = max(1, (n + max_elements_per_subset - 1) // max_elements_per_subset)
+def sort_key_specific_power_load(pm, specific_power_function_database):
+    return (
+        specific_power_function_database[pm["type"]]["0.0"],
+        -max(pm["s"]["load"]["cpu"], pm["s"]["load"]["memory"]),
+        -min(pm["s"]["load"]["cpu"], pm["s"]["load"]["memory"]),
+    )
+
+
+def split_dict_sorted(
+    d, max_elements_per_subset, sort_key, specific_power_function_database
+):
+    items_with_keys = sorted(
+        (
+            (sort_key(value, specific_power_function_database), key, value)
+            for key, value in d.items()
+        )
+    )
+
+    # Calculate the number of subsets
+    n = len(items_with_keys)
     subsets = []
 
-    # Create a list of tuples with sort_key for min-heap
-    items_with_keys = [(sort_key(value), key, value) for key, value in d.items()]
-    heapq.heapify(items_with_keys)  # Transform the list into a heap in O(n) time
-
-    for _ in range(num_subsets):
-        subset = {}
-        for _ in range(max_elements_per_subset):
-            if items_with_keys:
-                _, key, value = heapq.heappop(items_with_keys)
-                subset[key] = value
-            else:
-                break  # No more items to pop
+    # Split the sorted items into subsets
+    for i in range(0, n, max_elements_per_subset):
+        subset_items = items_with_keys[i : i + max_elements_per_subset]
+        subset = {key: value for _, key, value in subset_items}
         subsets.append(subset)
 
     return subsets
 
 
-def split_dict_randomly(d, max_elements_per_subset):
-    keys = list(d.keys())
-    random.shuffle(keys)  # Shuffle the keys to ensure randomness
-    n = len(keys)
-    # Calculate the number of subsets needed
-    num_subsets = max(1, (n + max_elements_per_subset - 1) // max_elements_per_subset)
-    # Calculate the approximate size per subset
-    size_per_subset = (n + num_subsets - 1) // num_subsets  # Ceiling division
-    subsets = []
-    for i in range(0, n, size_per_subset):
-        subset_keys = keys[i : i + size_per_subset]
-        subset_dict = {k: d[k] for k in subset_keys}
-        subsets.append(subset_dict)
-    return subsets
+def split_dict_unsorted(d, max_size):
+    it = iter(d.items())
+    for _ in range(0, len(d), max_size):
+        yield dict(islice(it, max_size))

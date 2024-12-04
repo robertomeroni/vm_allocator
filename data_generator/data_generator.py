@@ -9,10 +9,10 @@ from config_azure import (
     # from config_chameleon_legacy_11_119 import (
     # from config_chameleon_new_85 import (
     # from config_intel_pik_llnl_meta2013 import (
+    EQUAL_SPEED,
     data_folder_path,
     pm_cpu_capacity,
     pm_memory_capacity,
-    pm_speed_range,
     pm_time_to_turn_on_range,
     pm_time_to_turn_off_range,
     vm_requested_cpu,
@@ -28,6 +28,10 @@ from config_azure import (
     migration_time_resume_vm_on_target,
 )
 
+def calculate_speed(max_power):
+    coefficient = 0.0010760
+    intercept = 0.1226465
+    return coefficient * max_power + intercept
 
 def calculate_power_consumption(cpu_cores, memory_gb):
     coefficients = {
@@ -71,7 +75,6 @@ def generate_physical_machines(
     n,
     cpu_capacity,
     memory_capacity,
-    speed_range,
     time_to_turn_on_range,
     time_to_turn_off_range,
     state_percentage,
@@ -88,9 +91,6 @@ def generate_physical_machines(
         cpu = np.random.choice(cpu_capacity)
         memory = 4 * cpu
         capacity = (cpu, memory)
-        speed = np.random.beta(1, 5)
-        speed = speed * (speed_range[1] - speed_range[0]) + speed_range[0]
-        features = (speed,)
         state = (
             round(
                 np.random.uniform(time_to_turn_on_range[0], time_to_turn_on_range[1]), 1
@@ -103,7 +103,12 @@ def generate_physical_machines(
             state_list[i],
         )
         power_consumption = calculate_power_consumption(cpu, memory)
-        physical_machines.append((id, capacity, features, state, power_consumption))
+        max_power = power_consumption[-1][1]
+        if EQUAL_SPEED:
+            speed = 1.0
+        else:
+            speed = calculate_speed(max_power)
+        physical_machines.append((id, capacity, speed, state, power_consumption))
     return physical_machines
 
 
@@ -177,7 +182,18 @@ def generate_virtual_machines(
             / migration_time_network_bandwidth
         )
         migration_total_time = migration_first_round_time + migration_down_time
-        migration = (0.0, migration_total_time, migration_down_time, -1, -1)
+        migration_energy = (
+            migration["energy"]["coefficient"] * requested[1]
+            + migration["energy"]["constant"]
+        )
+        migration = (
+            0.0,
+            migration_total_time,
+            migration_down_time,
+            -1,
+            -1,
+            migration_energy,
+        )
         virtual_machines.append((id, requested, allocation, run, migration))
     return virtual_machines
 
@@ -198,22 +214,23 @@ def update_physical_machine_loads(physical_machines, virtual_machines):
     # Update physical machines with the new loads
     updated_physical_machines = []
     for pm in physical_machines:
-        id, capacity, features, state, power_consumption = pm
+        id, capacity, speed, state, power_consumption = pm
         cpu_load = pm_loads[id]["cpu_load"]
         memory_load = pm_loads[id]["memory_load"]
         updated_state = (state[0], state[1], (cpu_load, memory_load), state[3])
+        type =
         updated_physical_machines.append(
-            (id, capacity, features, updated_state, power_consumption)
+            (id, capacity, updated_state, power_consumption)
         )
 
     return updated_physical_machines
 
 
 def format_physical_machines(physical_machines):
-    legend = "// <id, capacity (cpu, memory), features (speed), state (time_to_turn_on, time_to_turn_off, load (cpu_load, memory_load), state)>\n"
+    legend = "// <id, capacity (cpu, memory), state (time_to_turn_on, time_to_turn_off, load (cpu_load, memory_load), state), type>\n"
     formatted_physical_machines = legend + "\nphysical_machines = {\n"
     for pm in physical_machines:
-        formatted_physical_machines += f"  <{pm[0]}, <{pm[1][0]}, {pm[1][1]}>, <{pm[2][0]}>, <{pm[3][0]}, {pm[3][1]}, <{pm[3][2][0]}, {pm[3][2][1]}>, {pm[3][3]}>>,\n"
+        formatted_physical_machines += f"  <{pm[0]}, <{pm[1][0]}, {pm[1][1]}>, {pm[2]}, <{pm[3][0]}, {pm[3][1]}, <{pm[3][2][0]}, {pm[3][2][1]}>, {pm[3][3]}>>,\n"
     formatted_physical_machines = formatted_physical_machines.rstrip(",\n") + "\n};"
     return formatted_physical_machines
 
@@ -235,7 +252,7 @@ def format_latency_matrix(latency_matrix):
     return formatted_latency
 
 
-def format_power_function(physical_machines):
+def format_specific_power_function(physical_machines):
     formatted_power_function = "nb_points = 11;\n\n"
     formatted_power_function += "power_function = [\n"
     for pm in physical_machines:
@@ -243,7 +260,6 @@ def format_power_function(physical_machines):
         formatted_power_function += f"  [{points}],\n"
     formatted_power_function = formatted_power_function.rstrip(",\n") + "\n];"
     return formatted_power_function
-
 
 def generate_unique_filename(base_path, base_name, extension):
     version = 1
@@ -321,7 +337,6 @@ physical_machines = generate_physical_machines(
     num_physical_machines,
     pm_cpu_capacity,
     pm_memory_capacity,
-    pm_speed_range,
     pm_time_to_turn_on_range,
     pm_time_to_turn_off_range,
     state_percentage,
