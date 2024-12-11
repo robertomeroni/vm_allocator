@@ -99,9 +99,7 @@ float revenue[vm in virtual_machines] = (vm.requested.cpu * price.cpu + vm.reque
 // Objective Function
 maximize   sum(pm in physical_machines) ( 
 	         - PUE * price.energy * (is_on[pm] * static_energy[pm] + additional_energy[pm])
-		     + sum (vm in virtual_machines) ( 
-        		   allocation[vm][pm] * revenue[vm]
-		  	   )
+		     + sum (vm in virtual_machines) allocation[vm][pm] * revenue[vm]
 		   );
 	   
 subject to {

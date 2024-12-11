@@ -124,13 +124,16 @@ def generate_new_vms(new_vms_per_step, existing_ids, pattern="constant", step=0)
     return new_vms  # Return the list of new VMs
 
 
-def generate_pms(num_pms):
+def generate_pms(num_pms, homogenous=False):
     pm_database, _, _, specific_power_function_database = load_pm_database()
     pms = {}
     nb_points = 11
 
     for pm_id in range(num_pms):
-        type = np.random.randint(0, len(pm_database))
+        if homogenous:
+            type = 0
+        else:
+            type = np.random.randint(0, len(pm_database))
         pms[pm_id] = {"id": pm_id}
         pms[pm_id].update(pm_database[type])
 
@@ -147,6 +150,3 @@ def generate_pms(num_pms):
         pm_file.write(formatted_specific_power_function)
 
     print(f"Physical machines data saved to {INITIAL_PMS_FILE}")
-
-if __name__ == "__main__":
-    generate_pms(1000)

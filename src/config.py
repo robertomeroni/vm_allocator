@@ -9,6 +9,7 @@ SAVE_LOGS = True
 
 # Workload
 USE_REAL_DATA = True
+HOMOGENOUS = False
 
 # WORKLOAD_NAME = "Intel-Netbatch-2012-A"
 # WORKLOAD_NAME = "Intel-Netbatch-2012-B"
@@ -21,8 +22,8 @@ USE_REAL_DATA = True
 # WORKLOAD_NAME = "TU-Delft-2007"
 # WORKLOAD_NAME = "UniLu-Gaia-2014"
 # WORKLOAD_NAME = "Azure-2020"
-# WORKLOAD_NAME = "Chameleon-Legacy-2020"
-WORKLOAD_NAME = "Chameleon-New-2020"
+WORKLOAD_NAME = "Chameleon-Legacy-2020"
+# WORKLOAD_NAME = "Chameleon-New-2020"
 
 # Simulation parameters
 STARTING_STEP = 1

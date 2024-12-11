@@ -328,6 +328,8 @@ def guazzone_bfd(vms, pms, idle_power):
         for pm in sorted_pms:
             if vm["run"]["pm"] == pm["id"]:
                 break  # VM is already running on the best PM
+            if vm["run"]["pm"] != -1 and pm["s"]["load"]["cpu"] == 0 and pm["s"]["load"]["memory"] == 0:
+                continue
             if vm_fits_on_pm(vm, pm):
                 pm["s"]["load"]["cpu"] += vm["requested"]["cpu"] / pm["capacity"]["cpu"]
                 pm["s"]["load"]["memory"] += (

@@ -70,6 +70,7 @@ USE_RANDOM_SEED = getattr(config, "USE_RANDOM_SEED", None)
 SEED_NUMBER = getattr(config, "SEED_NUMBER", None)
 STARTING_STEP = getattr(config, "STARTING_STEP", None)
 USE_REAL_DATA = getattr(config, "USE_REAL_DATA", None)
+HOMOGENOUS = getattr(config, "HOMOGENOUS", None)
 WORKLOAD_NAME = getattr(config, "WORKLOAD_NAME", None)
 PRINT_TO_CONSOLE = getattr(config, "PRINT_TO_CONSOLE", None)
 SAVE_LOGS = getattr(config, "SAVE_LOGS", None)
@@ -108,7 +109,7 @@ else:
     VMS_TRACE_FILE = None
 
 if args.generate_pms:
-    generate_pms(args.generate_pms)
+    generate_pms(args.generate_pms, HOMOGENOUS)
 
 if USE_RANDOM_SEED:
     np.random.seed(SEED_NUMBER)

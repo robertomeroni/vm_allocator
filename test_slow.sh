@@ -2,7 +2,7 @@
 
 # Define the ranges for parameters to be modified
 USE_REAL_DATA=True
-USE_SPEED_ALGORITHM=False
+HOMOGENOUS=False
 
 USE_RANDOM_SEED_VALUES=(True)
 SEED_NUMBER_VALUES=($(seq 1 1))  # This creates a range from 1 to 20
@@ -17,17 +17,17 @@ NEW_VMS_PATTERN_VALUES=(
                         )
 
 MASTER_MODEL_VALUES=(
-                    'main' 
-                    'mini'
-                    'hybrid'
-                    'compound'
-                    'multilayer'
-                    'first_fit'
-                    'best_fit' 
+                    # 'main' 
+                    # 'mini'
+                    # 'hybrid'
+                    # 'compound'
+                    # 'multilayer'
+                    # 'first_fit'
+                    # 'best_fit' 
+                    # 'shi_OM'
+                    # 'shi_AC'
+                    # 'shi_PU'
                     'guazzone'
-                    'shi_OM'
-                    'shi_AC'
-                    'shi_PU'
                     )
 WORKLOAD_NAME_VALUES=(
   # 'Chameleon-New-2020'
@@ -40,8 +40,8 @@ WORKLOAD_NAME_VALUES=(
   # 'UniLu-Gaia-2014'
   # 'Intel-Netbatch-2012-A'
   # 'Intel-Netbatch-2012-B'
-  'Intel-Netbatch-2012-C'
-  'Intel-Netbatch-2012-D'
+  # 'Intel-Netbatch-2012-C'
+  # 'Intel-Netbatch-2012-D'
   # 'Azure-2020'
 )
 
@@ -73,7 +73,7 @@ function set_parameters() {
   case "$WORKLOAD_NAME" in
     "Azure-2020")
       TIME_STEP=5
-      NUM_TIME_STEPS=10000
+      NUM_TIME_STEPS=5000
       ;;
     "Chameleon-Legacy-2020")
       TIME_STEP=50
@@ -184,7 +184,7 @@ for USE_RANDOM_SEED in "${USE_RANDOM_SEED_VALUES[@]}"; do
             sed -i "s/^SAVE_LOGS = .*/SAVE_LOGS = False/" "$TEMP_CONFIG_FILE"
 
             sed -i "s/^USE_REAL_DATA = .*/USE_REAL_DATA = $USE_REAL_DATA/" "$TEMP_CONFIG_FILE"
-            sed -i "s/^USE_SPEED_ALGORITHM = .*/USE_SPEED_ALGORITHM = $USE_SPEED_ALGORITHM/" "$TEMP_CONFIG_FILE"
+            sed -i "s/^HOMOGENEOUS = .*/HOMOGENEOUS = $HOMOGENEOUS/" "$TEMP_CONFIG_FILE"
             sed -i "s/^USE_RANDOM_SEED = .*/USE_RANDOM_SEED = $USE_RANDOM_SEED/" "$TEMP_CONFIG_FILE"
             sed -i "s/^SEED_NUMBER = .*/SEED_NUMBER = $SEED_NUMBER/" "$TEMP_CONFIG_FILE"
             sed -i "s/^TIME_STEP = .*/TIME_STEP = $TIME_STEP/" "$TEMP_CONFIG_FILE"
@@ -259,7 +259,7 @@ for USE_RANDOM_SEED in "${USE_RANDOM_SEED_VALUES[@]}"; do
             
             # Save the results and configuration parameters to the results file
             echo "Test $CURRENT_TEST of $TOTAL_TESTS" >> "$RESULTS_FILE"
-            echo "USE_SPEED_ALGORITHM=$USE_SPEED_ALGORITHM, NEW_VMS_PATTERN=$NEW_VMS_PATTERN, USE_RANDOM_SEED=$USE_RANDOM_SEED, SEED_NUMBER=$SEED_NUMBER, NEW_VMS_PER_STEP=$NEW_VMS_PER_STEP" >> "$RESULTS_FILE"
+            echo "HOMOGENEOUS=$HOMOGENEOUS, NEW_VMS_PATTERN=$NEW_VMS_PATTERN, USE_RANDOM_SEED=$USE_RANDOM_SEED, SEED_NUMBER=$SEED_NUMBER, NEW_VMS_PER_STEP=$NEW_VMS_PER_STEP" >> "$RESULTS_FILE"
             echo "------------------------------------------" >> "$RESULTS_FILE"
             echo "WORKLOAD_NAME=$WORKLOAD_NAME" >> "$RESULTS_FILE"
             echo "MASTER_MODEL=$MASTER_MODEL" >> "$RESULTS_FILE"
@@ -289,7 +289,7 @@ for USE_RANDOM_SEED in "${USE_RANDOM_SEED_VALUES[@]}"; do
             echo "" >> "$RESULTS_FILE"
 
             echo "Test $CURRENT_TEST of $TOTAL_TESTS"
-            echo "USE_SPEED_ALGORITHM=$USE_SPEED_ALGORITHM, NEW_VMS_PATTERN=$NEW_VMS_PATTERN, USE_RANDOM_SEED=$USE_RANDOM_SEED, SEED_NUMBER=$SEED_NUMBER, NEW_VMS_PER_STEP=$NEW_VMS_PER_STEP"
+            echo "HOMOGENEOUS=$HOMOGENEOUS, NEW_VMS_PATTERN=$NEW_VMS_PATTERN, USE_RANDOM_SEED=$USE_RANDOM_SEED, SEED_NUMBER=$SEED_NUMBER, NEW_VMS_PER_STEP=$NEW_VMS_PER_STEP"
             echo "------------------------------------------"
             echo "WORKLOAD_NAME=$WORKLOAD_NAME" 
             echo "MASTER_MODEL=$MASTER_MODEL"
