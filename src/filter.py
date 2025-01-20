@@ -175,9 +175,7 @@ def sort_key_energy_intensity_load(pm, energy_intensity_database):
     )
 
 
-def split_dict_sorted(
-    d, max_elements_per_subset, sort_key, energy_intensity_database
-):
+def split_dict_sorted(d, max_elements_per_subset, sort_key, energy_intensity_database):
     items_with_keys = sorted(
         (
             (sort_key(value, energy_intensity_database), key, value)

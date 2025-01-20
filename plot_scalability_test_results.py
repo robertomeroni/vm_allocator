@@ -8,19 +8,19 @@ def parse_report_file(filename):
     """
     Reads the report file and returns a structure of data in the form:
     {
-      'master_model_name1': [(pms_1, runtime_1), (pms_2, runtime_2), ...],
-      'master_model_name2': [...],
+      'algorithm_name1': [(pms_1, runtime_1), (pms_2, runtime_2), ...],
+      'algorithm_name2': [...],
       ...
     }
     """
     # Regex patterns to match fields of interest
     pms_pattern = re.compile(r'PMS\s*=\s*(\d+)')
-    master_model_pattern     = re.compile(r'MASTER_MODEL\s*=\s*(\w+)')
+    algorithm_pattern     = re.compile(r'ALGORITHM\s*=\s*(\w+)')
     allocation_runtime_pattern = re.compile(r'Allocation Runtime:\s*([\d\.]+)')
     
     data = {}
     
-    current_master_model = None
+    current_algorithm = None
     current_pms = None
     
     with open(filename, 'r', encoding='utf-8') as f:
@@ -32,39 +32,39 @@ def parse_report_file(filename):
             if pms_match:
                 current_pms = float(pms_match.group(1))
             
-            # Check for MASTER_MODEL
-            master_model_match = master_model_pattern.search(line)
-            if master_model_match:
-                current_master_model = master_model_match.group(1)
+            # Check for ALGORITHM
+            algorithm_match = algorithm_pattern.search(line)
+            if algorithm_match:
+                current_algorithm = algorithm_match.group(1)
             
             # Check for total runtime
             runtime_match = allocation_runtime_pattern.search(line)
-            if runtime_match and current_master_model is not None and current_pms is not None:
+            if runtime_match and current_algorithm is not None and current_pms is not None:
                 runtime = float(runtime_match.group(1))
                 
                 # Initialize dictionary list if not existing
-                if current_master_model not in data:
-                    data[current_master_model] = []
+                if current_algorithm not in data:
+                    data[current_algorithm] = []
                 
                 # Store the pair
-                data[current_master_model].append((current_pms, runtime))
+                data[current_algorithm].append((current_pms, runtime))
                 
                 # Reset these so we only record once per block
-                current_master_model = None
+                current_algorithm = None
                 current_pms = None
     return data
 
 def plot_data(data):
     """
-    Plots a line for each MASTER_MODEL, 
-    where X = PMs, Y = Total Model Runtime.
+    Plots a line for each ALGORITHM, 
+    where X = PMs, Y = Total Algorithm Runtime.
     """
     plt.figure(figsize=(24, 18))
     
     line_styles = ['-', '--', '-.', ':']
     markers = ['o', 's', 'D', '^']
     
-    for i, (master_model, points) in enumerate(data.items()):
+    for i, (algorithm, points) in enumerate(data.items()):
         # Sort points by X just to ensure a clean line plot
         points.sort(key=lambda x: x[0])
         
@@ -72,17 +72,17 @@ def plot_data(data):
         ys = [p[1] for p in points]
         
         # Print x and y values for each algorithm
-        print(f"Algorithm: {master_model}")
+        print(f"Algorithm: {algorithm}")
         print(f"X values (PMs): {xs}")
-        print(f"Y values (Total Model Runtime): {ys}\n")
+        print(f"Y values (Total Algorithm Runtime): {ys}\n")
         
         # Use different line styles and markers for each model
         plt.plot(xs, ys, linestyle=line_styles[i % len(line_styles)], 
-                 marker=markers[i % len(markers)], label=master_model)
+                 marker=markers[i % len(markers)], label=algorithm)
     
     plt.xlabel('Datacenter size')
-    plt.ylabel('Total Model Runtime (seconds)')
-    plt.title('Total Model Runtime vs PMs by MASTER_MODEL')
+    plt.ylabel('Total Algorithm Runtime (seconds)')
+    plt.title('Total Algorithm Runtime vs PMs by ALGORITHM')
     plt.legend()
     plt.grid(True)
     plt.tight_layout()

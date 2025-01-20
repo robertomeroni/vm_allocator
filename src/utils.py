@@ -505,10 +505,8 @@ def save_model_input_format(
     # Convert data to the required format
     formatted_vms = convert_vms_to_model_input_format(vms)
     formatted_pms = convert_pms_to_model_input_format(pms)
-    formatted_energy_intensity = (
-        convert_energy_intensity_to_model_input_format(
-            pms, energy_intensity_database, nb_points
-        )
+    formatted_energy_intensity = convert_energy_intensity_to_model_input_format(
+        pms, energy_intensity_database, nb_points
     )
 
     # Write formatted VMs to file

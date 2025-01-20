@@ -474,9 +474,9 @@ def log_final_net_profit(
     avg_wait_time,
     runtime_efficiency,
     overall_time_efficiency,
-    total_model_runtime,
+    total_algorithm_runtime,
     log_folder_path,
-    master_model,
+    algorithm,
     use_random_seed,
     time_step,
     num_steps,
@@ -524,8 +524,8 @@ def log_final_net_profit(
         f"Total Revenue Gained from Completed VMs: ${total_revenue:.6f}"
     )
     total_costs_message = f"Total Costs Incurred: ${total_costs:.6f}"
-    total_model_runtime_message = (
-        f"Total Model Runtime: {total_model_runtime:.2f} seconds"
+    total_algorithm_runtime_message = (
+        f"Total Algorithm Runtime: {total_algorithm_runtime:.2f} seconds"
     )
 
     if total_entries > 0:
@@ -549,14 +549,14 @@ def log_final_net_profit(
     print(avg_wait_time_message)
     print(runtime_efficiency_message)
     print(overall_time_efficiency_message)
-    print(total_model_runtime_message)
+    print(total_algorithm_runtime_message)
 
     # Save to log file (without colors)
     log_file_path = os.path.join(log_folder_path, "final_net_profit.log")
     with open(log_file_path, "a") as log_file:
 
-        if master_model:
-            model_message = f"Master Model: {master_model}"
+        if algorithm:
+            model_message = f"Master Model: {algorithm}"
             log_file.write(model_message + "\n")
 
         if use_real_data:
@@ -572,7 +572,7 @@ def log_final_net_profit(
         log_file.write(avg_wait_time_message + "\n")
         log_file.write(runtime_efficiency_message + "\n")
         log_file.write(overall_time_efficiency_message + "\n")
-        log_file.write(total_model_runtime_message + "\n")
+        log_file.write(total_algorithm_runtime_message + "\n")
         log_file.write("=============================\n")
         log_file.write(total_revenue_message + "\n")
         log_file.write(total_costs_message + "\n")

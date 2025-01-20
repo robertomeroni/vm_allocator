@@ -34,18 +34,18 @@ NUM_TIME_STEPS = 20  # Number of time steps to simulate
 NEW_VMS_PER_STEP = 30  # Expected number of new VMs to generate at each time step
 NEW_VMS_PATTERN = "random_spikes"
 
-# Models to use
-# MASTER_MODEL = "maxi"
-# MASTER_MODEL = "mini"
-MASTER_MODEL = "hybrid"
-# MASTER_MODEL = "compound"
-# MASTER_MODEL = "multilayer"
-# MASTER_MODEL = "first_fit"
-# MASTER_MODEL = "best_fit"
-# MASTER_MODEL = "shi_OM"
-# MASTER_MODEL = "shi_AC"
-# MASTER_MODEL = "shi_PU"
-# MASTER_MODEL = "lago"
+# Algorithms to use
+# ALGORITHM = "maxi"
+# ALGORITHM = "mini"
+ALGORITHM = "hybrid"
+# ALGORITHM = "compound"
+# ALGORITHM = "multilayer"
+# ALGORITHM = "first_fit"
+# ALGORITHM = "best_fit"
+# ALGORITHM = "shi_OM"
+# ALGORITHM = "shi_AC"
+# ALGORITHM = "shi_PU"
+# ALGORITHM = "lago"
 
 MACRO_MODEL_MAX_SUBSETS = 5
 MACRO_MODEL_MAX_PMS = 20
@@ -74,9 +74,13 @@ if not USE_REAL_DATA:
 BASE_PATH = ""
 SIMULATION_INPUT_FOLDER_PATH = os.path.join(BASE_PATH, "simulation/simulation_input")
 MACRO_MODEL_INPUT_FOLDER_PATH = os.path.join(BASE_PATH, "simulation/model_input_macro")
-MACRO_MODEL_OUTPUT_FOLDER_PATH = os.path.join(BASE_PATH, "simulation/model_output_macro")
+MACRO_MODEL_OUTPUT_FOLDER_PATH = os.path.join(
+    BASE_PATH, "simulation/model_output_macro"
+)
 MICRO_MODEL_INPUT_FOLDER_PATH = os.path.join(BASE_PATH, "simulation/model_input_micro")
-MICRO_MODEL_OUTPUT_FOLDER_PATH = os.path.join(BASE_PATH, "simulation/model_output_micro")
+MICRO_MODEL_OUTPUT_FOLDER_PATH = os.path.join(
+    BASE_PATH, "simulation/model_output_micro"
+)
 MIGRATION_MODEL_INPUT_FOLDER_PATH = os.path.join(
     BASE_PATH, "simulation/model_input_migration"
 )

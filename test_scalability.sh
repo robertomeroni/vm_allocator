@@ -12,7 +12,7 @@ PMS_VALUES=(
             25000
             # 30000
            )
-MASTER_MODEL_VALUES=(
+ALGORITHM_VALUES=(
                     # 'maxi' 
                     # 'mini'
                     'hybrid'
@@ -41,7 +41,7 @@ PM_MANAGER_MAX_PMS=10
 
 WORKLOAD_NAME_VALUES=('synthetic')
 
-TOTAL_TESTS=$(( ${#USE_RANDOM_SEED_VALUES[@]} * ${#SEED_NUMBER_VALUES[@]} * ${#PMS_VALUES[@]} * ${#MASTER_MODEL_VALUES[@]} * ${#NEW_VMS_PER_STEP_VALUES[@]} ))
+TOTAL_TESTS=$(( ${#USE_RANDOM_SEED_VALUES[@]} * ${#SEED_NUMBER_VALUES[@]} * ${#PMS_VALUES[@]} * ${#ALGORITHM_VALUES[@]} * ${#NEW_VMS_PER_STEP_VALUES[@]} ))
 CURRENT_TEST=0
 
 # Create a temporary directory for modified config files
@@ -76,12 +76,12 @@ clear;
 for USE_RANDOM_SEED in "${USE_RANDOM_SEED_VALUES[@]}"; do
   for SEED_NUMBER in "${SEED_NUMBER_VALUES[@]}"; do
     for WORKLOAD_NAME in "${WORKLOAD_NAME_VALUES[@]}"; do
-      for MASTER_MODEL in "${MASTER_MODEL_VALUES[@]}"; do
+      for ALGORITHM in "${ALGORITHM_VALUES[@]}"; do
         for PMS in "${PMS_VALUES[@]}"; do
           for NEW_VMS_PER_STEP in "${NEW_VMS_PER_STEP_VALUES[@]}"; do
             NEW_VMS_PER_STEP=$((PMS / 10))
             # Define the temporary config file path
-            TEMP_CONFIG_FILE="$TEMP_DIR/config_${USE_RANDOM_SEED}_${SEED_NUMBER}_${WORKLOAD_NAME}_${TIME_STEP}_${NEW_VMS_PER_STEP}_${NUM_TIME_STEPS}_${MASTER_MODEL}.py"
+            TEMP_CONFIG_FILE="$TEMP_DIR/config_${USE_RANDOM_SEED}_${SEED_NUMBER}_${WORKLOAD_NAME}_${TIME_STEP}_${NEW_VMS_PER_STEP}_${NUM_TIME_STEPS}_${ALGORITHM}.py"
 
             # Copy the original config file to the temporary config file
             cp "$ORIGINAL_CONFIG_FILE" "$TEMP_CONFIG_FILE"
@@ -106,7 +106,7 @@ for USE_RANDOM_SEED in "${USE_RANDOM_SEED_VALUES[@]}"; do
             sed -i "s/^NEW_VMS_PER_STEP = .*/NEW_VMS_PER_STEP = $NEW_VMS_PER_STEP/" "$TEMP_CONFIG_FILE"
             sed -i "s/^NEW_VMS_PATTERN = .*/NEW_VMS_PATTERN = 'constant'/" "$TEMP_CONFIG_FILE"
             sed -i "s/^NUM_TIME_STEPS = .*/NUM_TIME_STEPS = $NUM_TIME_STEPS/" "$TEMP_CONFIG_FILE"
-            sed -i "s/^MASTER_MODEL = .*/MASTER_MODEL = '$MASTER_MODEL'/" "$TEMP_CONFIG_FILE"
+            sed -i "s/^ALGORITHM = .*/ALGORITHM = '$ALGORITHM'/" "$TEMP_CONFIG_FILE"
             sed -i "s/^WORKLOAD_NAME = .*/WORKLOAD_NAME = '$WORKLOAD_NAME'/" "$TEMP_CONFIG_FILE"
 
             sed -i "s/^MACRO_MODEL_MAX_PMS = .*/MACRO_MODEL_MAX_PMS = $MACRO_MODEL_MAX_PMS/" "$TEMP_CONFIG_FILE"
@@ -119,12 +119,12 @@ for USE_RANDOM_SEED in "${USE_RANDOM_SEED_VALUES[@]}"; do
             sed -i "s/^HARD_TIME_LIMIT_MICRO = .*/HARD_TIME_LIMIT_MICRO = 100000/" "$TEMP_CONFIG_FILE"
 
             # Define output log file for capturing run.sh output
-            OUTPUT_LOG_FILE="$TEMP_DIR/output_${USE_RANDOM_SEED}_${SEED_NUMBER}_${WORKLOAD_NAME}_${TIME_STEP}_${NEW_VMS_PER_STEP}_${NEW_VMS_PATTERN}_${NUM_TIME_STEPS}_${MASTER_MODEL}.log"
+            OUTPUT_LOG_FILE="$TEMP_DIR/output_${USE_RANDOM_SEED}_${SEED_NUMBER}_${WORKLOAD_NAME}_${TIME_STEP}_${NEW_VMS_PER_STEP}_${NEW_VMS_PATTERN}_${NUM_TIME_STEPS}_${ALGORITHM}.log"
 
             CURRENT_TEST=$((CURRENT_TEST + 1))
 
             echo "Running test $CURRENT_TEST of $TOTAL_TESTS..."
-            echo "Master model: $MASTER_MODEL, PMS: $PMS, VMS: $NEW_VMS_PER_STEP"
+            echo "Master model: $ALGORITHM, PMS: $PMS, VMS: $NEW_VMS_PER_STEP"
             echo ""
 
             # Run the simulation 
@@ -148,14 +148,14 @@ for USE_RANDOM_SEED in "${USE_RANDOM_SEED_VALUES[@]}"; do
             AVG_WAIT_TIME=$(grep "Average Wait Time" "$CLEANED_OUTPUT_LOG_FILE" | tail -n 1 | awk -F': ' '{print $2}')
             RUNTIME_EFFICIENCY=$(grep "Runtime Efficiency" "$CLEANED_OUTPUT_LOG_FILE" | tail -n 1 | awk -F': ' '{print $2}')
             OVERALL_TIME_EFFICIENCY=$(grep "Overall Time Efficiency" "$CLEANED_OUTPUT_LOG_FILE" | tail -n 1 | awk -F': ' '{print $2}')
-            TOTAL_MODEL_RUNTIME=$(grep "Total Model Runtime" "$CLEANED_OUTPUT_LOG_FILE" | tail -n 1 | awk -F': ' '{print $2}')
+            TOTAL_ALGORITHM_RUNTIME=$(grep "Total Algorithm Runtime" "$CLEANED_OUTPUT_LOG_FILE" | tail -n 1 | awk -F': ' '{print $2}')
             FINAL_NET_PROFIT=$(grep "Final Net Profit" "$CLEANED_OUTPUT_LOG_FILE" | tail -n 1 | awk -F': ' '{print $2}')
             
-            # Strip non-numeric characters from TOTAL_MODEL_RUNTIME
-            TOTAL_MODEL_RUNTIME=$(echo "$TOTAL_MODEL_RUNTIME" | sed 's/[^0-9.]//g')
+            # Strip non-numeric characters from TOTAL_ALGORITHM_RUNTIME
+            TOTAL_ALGORITHM_RUNTIME=$(echo "$TOTAL_ALGORITHM_RUNTIME" | sed 's/[^0-9.]//g')
 
-            if [ -z "$TOTAL_MODEL_RUNTIME" ] || [ -z "$NUM_TIME_STEPS" ]; then
-              echo "Error: TOTAL_MODEL_RUNTIME or NUM_TIME_STEPS is not set."
+            if [ -z "$TOTAL_ALGORITHM_RUNTIME" ] || [ -z "$NUM_TIME_STEPS" ]; then
+              echo "Error: TOTAL_ALGORITHM_RUNTIME or NUM_TIME_STEPS is not set."
               exit 1
             fi
 
@@ -164,13 +164,13 @@ for USE_RANDOM_SEED in "${USE_RANDOM_SEED_VALUES[@]}"; do
               exit 1
             fi
 
-            ALLOCATION_RUNTIME_PER_STEP=$(echo "scale=4; $TOTAL_MODEL_RUNTIME / $NUM_TIME_STEPS" | bc)
+            ALLOCATION_RUNTIME_PER_STEP=$(echo "scale=4; $TOTAL_ALGORITHM_RUNTIME / $NUM_TIME_STEPS" | bc)
 
             # Save the results and configuration parameters to the results file
             echo "Test $CURRENT_TEST of $TOTAL_TESTS" >> "$RESULTS_FILE"
             echo "PMS=$PMS, USE_RANDOM_SEED=$USE_RANDOM_SEED, SEED_NUMBER=$SEED_NUMBER, NEW_VMS_PER_STEP=$NEW_VMS_PER_STEP" >> "$RESULTS_FILE"
             echo "------------------------------------------" >> "$RESULTS_FILE"
-            echo "MASTER_MODEL=$MASTER_MODEL" >> "$RESULTS_FILE"
+            echo "ALGORITHM=$ALGORITHM" >> "$RESULTS_FILE"
             echo "TIME_STEP=$TIME_STEP" >> "$RESULTS_FILE"
             echo "NUM_TIME_STEPS=$NUM_TIME_STEPS" >> "$RESULTS_FILE"
             echo "------------------------------------------" >> "$RESULTS_FILE"
@@ -187,7 +187,7 @@ for USE_RANDOM_SEED in "${USE_RANDOM_SEED_VALUES[@]}"; do
             echo "Test $CURRENT_TEST of $TOTAL_TESTS"
             echo "PMS=$PMS, USE_RANDOM_SEED=$USE_RANDOM_SEED, SEED_NUMBER=$SEED_NUMBER, NEW_VMS_PER_STEP=$NEW_VMS_PER_STEP"
             echo "------------------------------------------"
-            echo "MASTER_MODEL=$MASTER_MODEL"
+            echo "ALGORITHM=$ALGORITHM"
             echo "TIME_STEP=$TIME_STEP"
             echo "NUM_TIME_STEPS=$NUM_TIME_STEPS"
             echo "------------------------------------------"

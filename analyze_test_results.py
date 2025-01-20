@@ -15,7 +15,7 @@ pio.templates.default = "plotly_dark"
 # Parse command-line arguments
 parser = argparse.ArgumentParser(description='Analyze simulation results from a log file.')
 parser.add_argument('file', help='Path to the log file containing simulation results.')
-parser.add_argument('--groupby', nargs='+', default=['MASTER_MODEL'], help='Parameters to group results by.')
+parser.add_argument('--groupby', nargs='+', default=['ALGORITHM'], help='Parameters to group results by.')
 parser.add_argument('--synthetic', action='store_true', help='Analyze synthetic workload results.')
 args = parser.parse_args()
 grouping_vars = args.groupby
@@ -57,7 +57,7 @@ with open(args.file, 'r') as f:
                         record[key.strip()] = value.strip()
         elif not start_parsing:
             continue  # Skip lines until 'WORKLOAD_NAME' is found
-        elif line.startswith('MASTER_MODEL'):
+        elif line.startswith('ALGORITHM'):
             key, value = line.split('=')
             record[key.strip()] = value.strip()
         elif line.startswith('TIME_STEP'):
@@ -72,7 +72,7 @@ with open(args.file, 'r') as f:
                 num_time_steps = value.strip()
             elif num_time_steps != value.strip():
                 time_step = None
-        elif line.startswith('Total Model Runtime:'):
+        elif line.startswith('Total Algorithm Runtime:'):
             key, value = line.split(':', 1)
             # Remove the 'seconds' text and any extra spaces
             time_value = value.replace('seconds', '').strip()

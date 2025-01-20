@@ -79,7 +79,7 @@ WORKLOAD_NAME = getattr(config, "WORKLOAD_NAME", None)
 PRINT_TO_CONSOLE = getattr(config, "PRINT_TO_CONSOLE", None)
 SAVE_LOGS = getattr(config, "SAVE_LOGS", None)
 SAVE_VM_AND_PM_SETS = getattr(config, "SAVE_VM_AND_PM_SETS", None)
-MASTER_MODEL = getattr(config, "MASTER_MODEL", None)
+ALGORITHM = getattr(config, "ALGORITHM", None)
 USE_LOAD_BALANCER = getattr(config, "USE_LOAD_BALANCER", None)
 MACRO_MODEL_MAX_PMS = getattr(config, "MACRO_MODEL_MAX_PMS", None)
 MACRO_MODEL_MAX_SUBSETS = getattr(config, "MACRO_MODEL_MAX_SUBSETS", None)
@@ -126,7 +126,9 @@ os.makedirs(MICRO_MODEL_INPUT_FOLDER_PATH, exist_ok=True)
 os.makedirs(MICRO_MODEL_OUTPUT_FOLDER_PATH, exist_ok=True)
 os.makedirs(SIMULATION_INPUT_FOLDER_PATH, exist_ok=True)
 
-if os.path.expanduser(INITIAL_PMS_FILE) != os.path.join(SIMULATION_INPUT_FOLDER_PATH, os.path.basename(INITIAL_PMS_FILE)):
+if os.path.expanduser(INITIAL_PMS_FILE) != os.path.join(
+    SIMULATION_INPUT_FOLDER_PATH, os.path.basename(INITIAL_PMS_FILE)
+):
     shutil.copy(
         os.path.expanduser(INITIAL_PMS_FILE),
         os.path.join(SIMULATION_INPUT_FOLDER_PATH, os.path.basename(INITIAL_PMS_FILE)),
@@ -166,7 +168,7 @@ if __name__ == "__main__":
         total_memory_load,
         total_fully_on_pm,
         num_steps,
-        total_model_runtime,
+        total_algorithm_runtime,
     ) = simulate_time_steps(
         initial_vms,
         initial_pms,
@@ -181,7 +183,7 @@ if __name__ == "__main__":
         performance_log_file,
         vm_execution_time_file,
         TIME_STEP,
-        MASTER_MODEL,
+        ALGORITHM,
         USE_LOAD_BALANCER,
         USE_REAL_DATA,
         PRINT_TO_CONSOLE,
@@ -222,9 +224,9 @@ if __name__ == "__main__":
         avg_wait_time,
         runtime_efficiency,
         overall_time_efficiency,
-        total_model_runtime,
+        total_algorithm_runtime,
         log_folder_path,
-        MASTER_MODEL,
+        ALGORITHM,
         USE_RANDOM_SEED,
         TIME_STEP,
         num_steps,
@@ -240,7 +242,7 @@ if __name__ == "__main__":
     )  # Calculate the total execution time
     with open(performance_log_file, "a", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(["Total Model Runtime", total_model_runtime])
+        writer.writerow(["Total Algorithm Runtime", total_algorithm_runtime])
         writer.writerow(
             ["Total Execution Time", total_execution_time]
         )  # Log the total execution time

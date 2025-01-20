@@ -307,6 +307,7 @@ def shi_allocation(vms, pms, sort_key):
     is_on = manage_pms_allocation(pms, allocation)
     return is_on
 
+
 @profile
 def lago(vms, pms, power_function_database):
     allocation = {vm_id: {"vm_id": vm_id, "pm_id": None} for vm_id in vms}
@@ -314,7 +315,7 @@ def lago(vms, pms, power_function_database):
         pms.values(),
         key=lambda pm: (
             pm["capacity"]["cpu"] / power_function_database[pm["type"]]["1.0"],
-            - power_function_database[pm["type"]]["1.0"],
+            -power_function_database[pm["type"]]["1.0"],
             pm["s"]["load"]["cpu"],
             pm["capacity"]["cpu"],
         ),

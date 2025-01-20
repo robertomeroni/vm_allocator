@@ -114,7 +114,7 @@ def run_macro_model(
     hard_time_limit_macro,
     hard_time_limit_micro,
     performance_log_file,
-    master_model,
+    algorithm,
 ):
     pms_with_migrations = {}
 
@@ -224,7 +224,9 @@ def run_macro_model(
 
         else:
             print(
-                color_text(f"Invalid macro OPL output for time step {step}...", Fore.RED)
+                color_text(
+                    f"Invalid macro OPL output for time step {step}...", Fore.RED
+                )
             )
             log_performance(
                 step,
@@ -235,7 +237,7 @@ def run_macro_model(
                 num_pms,
                 performance_log_file,
             )
-            if master_model != "hybrid":
+            if algorithm != "hybrid":
                 non_allocated_vms = get_non_allocated_workload(vms, scheduled_vms)
 
                 launch_micro_model(
@@ -276,7 +278,7 @@ def launch_macro_model(
     hard_time_limit_macro,
     hard_time_limit_micro,
     performance_log_file,
-    master_model,
+    algorithm,
 ):
     physical_machines = physical_machines_on.copy()
 
@@ -308,7 +310,7 @@ def launch_macro_model(
                         hard_time_limit_macro,
                         hard_time_limit_micro,
                         performance_log_file,
-                        master_model,
+                        algorithm,
                     )
                 for pm_id in list(highest_fragmentation_pms.keys()):
                     del physical_machines_on[pm_id]
@@ -470,7 +472,8 @@ def launch_micro_model(
                             MICRO_MODEL_INPUT_FOLDER_PATH, f"step_{step}/subset_{index}"
                         )
                         micro_model_output_folder_path = os.path.join(
-                            MICRO_MODEL_OUTPUT_FOLDER_PATH, f"step_{step}/subset_{index}"
+                            MICRO_MODEL_OUTPUT_FOLDER_PATH,
+                            f"step_{step}/subset_{index}",
                         )
 
                         os.makedirs(micro_model_input_folder_path, exist_ok=True)
@@ -742,9 +745,7 @@ def run_load_balancer(
             if pm_max == pm_min:
                 continue
             vms_on_pm_max = vms_on_pms[pm_max["id"]]
-            load_balancer(
-                vms_on_pm_max, pm_max, pm_min, energy_intensity_database
-            )
+            load_balancer(vms_on_pm_max, pm_max, pm_min, energy_intensity_database)
 
     load_balancer_end_time = time.time()
     log_performance(
@@ -830,6 +831,7 @@ def run_shi(
     )
     return turned_on_pms, turned_off_pms
 
+
 def run_lago(
     active_vms,
     physical_machines,
@@ -844,14 +846,13 @@ def run_lago(
     update_physical_machines_load(physical_machines, cpu_load, memory_load)
 
     # Run best fit algorithm
-    print(
-        color_text(f"\nRunning Lago algorithm for time step {step}...", Fore.YELLOW)
-    )
+    print(color_text(f"\nRunning Lago algorithm for time step {step}...", Fore.YELLOW))
     is_on = lago(active_vms, physical_machines, power_function_database)
     turned_on_pms, turned_off_pms = update_physical_machines_state(
         physical_machines, initial_physical_machines, is_on
     )
     return turned_on_pms, turned_off_pms
+
 
 def execute_time_step(
     active_vms,
@@ -1065,7 +1066,7 @@ def simulate_time_steps(
     performance_log_file,
     vm_execution_time_file,
     time_step,
-    master_model,
+    algorithm,
     use_load_balancer,
     use_real_data,
     print_to_console,
@@ -1121,7 +1122,7 @@ def simulate_time_steps(
     total_pm_switch_costs = 0.0
     total_pm_load_costs = 0.0
     total_migration_costs = 0.0
-    total_model_runtime = 0.0
+    total_algorithm_runtime = 0.0
 
     for pm in physical_machines.values():
         if pm["s"]["state"] == 0:
@@ -1183,12 +1184,12 @@ def simulate_time_steps(
                 vm["arrival_step"] = step
 
         # Determine which model to run
-        model_to_run = "none"
+        algorithm_to_run = "none"
 
-        if master_model:
-            model_to_run = master_model
+        if algorithm:
+            algorithm_to_run = algorithm
 
-        if master_model in [
+        if algorithm in [
             "maxi",
             "mini",
             "hybrid",
@@ -1218,10 +1219,10 @@ def simulate_time_steps(
         )
 
         if not is_state_changed:
-            model_to_run = "none"
+            algorithm_to_run = "none"
 
         # Call the appropriate model function
-        if model_to_run == "maxi":
+        if algorithm_to_run == "maxi":
             start_time = time.time()
             launch_macro_model(
                 active_vms,
@@ -1240,11 +1241,11 @@ def simulate_time_steps(
                 hard_time_limit_macro,
                 hard_time_limit_micro,
                 performance_log_file,
-                master_model,
+                algorithm,
             )
             end_time = time.time()
 
-        elif model_to_run == "mini":
+        elif algorithm_to_run == "mini":
             non_allocated_vms = get_non_allocated_workload(active_vms, scheduled_vms)
 
             start_time = time.time()
@@ -1266,7 +1267,7 @@ def simulate_time_steps(
             )
             end_time = time.time()
 
-        elif model_to_run == "hybrid":
+        elif algorithm_to_run == "hybrid":
             non_allocated_vms = get_non_allocated_workload(active_vms, scheduled_vms)
 
             start_time = time.time()
@@ -1303,10 +1304,10 @@ def simulate_time_steps(
                 hard_time_limit_macro,
                 hard_time_limit_micro,
                 performance_log_file,
-                master_model,
+                algorithm,
             )
             end_time = time.time()
-        elif model_to_run == "compound":
+        elif algorithm_to_run == "compound":
             physical_machines_on_copy = physical_machines_on.copy()
             non_allocated_vms = get_non_allocated_workload(active_vms, scheduled_vms)
 
@@ -1370,7 +1371,7 @@ def simulate_time_steps(
                             if pm_id in pms_to_turn_off_after_migration:
                                 del pms_to_turn_off_after_migration[pm_id]
             end_time = time.time()
-        elif model_to_run == "multilayer":
+        elif algorithm_to_run == "multilayer":
             physical_machines_on_copy = physical_machines_on.copy()
             non_allocated_vms = get_non_allocated_workload(active_vms, scheduled_vms)
 
@@ -1444,13 +1445,13 @@ def simulate_time_steps(
                     performance_log_file,
                 )
             end_time = time.time()
-        elif model_to_run == "backup":
+        elif algorithm_to_run == "backup":
             start_time = time.time()
             run_backup_allocation(
                 active_vms, physical_machines_on, idle_power, step, time_step
             )
             end_time = time.time()
-        elif model_to_run == "best_fit":
+        elif algorithm_to_run == "best_fit":
             start_time = time.time()
             turned_on_pms, turned_off_pms = run_best_fit(
                 active_vms,
@@ -1460,7 +1461,7 @@ def simulate_time_steps(
                 time_step,
             )
             end_time = time.time()
-        elif model_to_run == "first_fit":
+        elif algorithm_to_run == "first_fit":
             start_time = time.time()
             turned_on_pms, turned_off_pms = run_first_fit(
                 active_vms,
@@ -1470,9 +1471,8 @@ def simulate_time_steps(
                 time_step,
             )
             end_time = time.time()
- 
 
-        elif model_to_run == "shi_OM":
+        elif algorithm_to_run == "shi_OM":
             start_time = time.time()
             turned_on_pms, turned_off_pms = run_shi(
                 active_vms,
@@ -1484,7 +1484,7 @@ def simulate_time_steps(
             )
             end_time = time.time()
 
-        elif model_to_run == "shi_AC":
+        elif algorithm_to_run == "shi_AC":
             start_time = time.time()
             turned_on_pms, turned_off_pms = run_shi(
                 active_vms,
@@ -1496,7 +1496,7 @@ def simulate_time_steps(
             )
             end_time = time.time()
 
-        elif model_to_run == "shi_PU":
+        elif algorithm_to_run == "shi_PU":
             start_time = time.time()
             turned_on_pms, turned_off_pms = run_shi(
                 active_vms,
@@ -1507,8 +1507,8 @@ def simulate_time_steps(
                 "PercentageUtil",
             )
             end_time = time.time()
-        
-        elif model_to_run == "lago":
+
+        elif algorithm_to_run == "lago":
             start_time = time.time()
             turned_on_pms, turned_off_pms = run_lago(
                 active_vms,
@@ -1520,10 +1520,10 @@ def simulate_time_steps(
             )
             end_time = time.time()
 
-        elif model_to_run == "none":
+        elif algorithm_to_run == "none":
             print(color_text(f"\nNo model to run for time step {step}...", Fore.YELLOW))
 
-        if master_model in [
+        if algorithm in [
             "maxi",
             "mini",
             "hybrid",
@@ -1551,19 +1551,19 @@ def simulate_time_steps(
                 pm_manager_max_pms=pm_manager_max_pms,
             )
             end_time_pm_manager = time.time()
-            total_model_runtime += end_time_pm_manager - start_time_pm_manager
+            total_algorithm_runtime += end_time_pm_manager - start_time_pm_manager
 
             turned_on_pms, turned_off_pms = update_physical_machines_state(
                 physical_machines, initial_physical_machines, is_on
             )
 
-        if model_to_run != "none":
+        if algorithm_to_run != "none":
             is_new_vms_arrival = False
             is_vms_terminated = False
             is_migration_completed = False
             is_pms_turned_on = False
 
-            total_model_runtime += end_time - start_time
+            total_algorithm_runtime += end_time - start_time
 
             # Calculate and update load
             cpu_load, memory_load = calculate_load(
@@ -1668,5 +1668,5 @@ def simulate_time_steps(
         total_memory_load,
         total_fully_on_pm,
         step - starting_step,
-        total_model_runtime,
+        total_algorithm_runtime,
     )
