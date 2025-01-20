@@ -28,22 +28,22 @@ NEW_VMS_PATTERN_VALUES=(
 
 ALGORITHM_VALUES=(
                     'maxi' 
-                    # 'mini'
+                    'mini'
                     'hybrid'
-                    # 'compound'
+                    'compound'
                     'multilayer'
-                    # 'first_fit'
+                    'first_fit'
                     'best_fit' 
-                    # 'shi_OM'
-                    # 'shi_AC'
-                    # 'shi_PU'
-                    # 'lago'
+                    'shi_OM'
+                    'shi_AC'
+                    'shi_PU'
+                    'lago'
                     )
 WORKLOAD_NAME_VALUES=(
   'Intel-Netbatch-2012-A'
-  # 'Intel-Netbatch-2012-B'
-  # 'Intel-Netbatch-2012-C'
-  # 'Intel-Netbatch-2012-D'
+  'Intel-Netbatch-2012-B'
+  'Intel-Netbatch-2012-C'
+  'Intel-Netbatch-2012-D'
   'Azure-2020'
 )
 
@@ -77,19 +77,11 @@ function set_parameters() {
   case "$WORKLOAD_NAME" in
     "Azure-2020")
       TIME_STEP=5
-      NUM_TIME_STEPS=20
-      ;;
-    "Chameleon-Legacy-2020")
-      TIME_STEP=50
-      NUM_TIME_STEPS=500000
-      ;;
-    "Chameleon-New-2020")
-      TIME_STEP=50
-      NUM_TIME_STEPS=50000000
+      NUM_TIME_STEPS=5000
       ;;
     "Intel-Netbatch-2012-A")
       TIME_STEP=10
-      NUM_TIME_STEPS=20
+      NUM_TIME_STEPS=3000
       ;;
     "Intel-Netbatch-2012-B")
       TIME_STEP=10
@@ -103,23 +95,6 @@ function set_parameters() {
       TIME_STEP=10
       NUM_TIME_STEPS=3000
       ;;
-    "LLNL-Thunder-2007")
-      TIME_STEP=50
-      NUM_TIME_STEPS=20000
-      ;;
-    "METACENTRUM-2009")
-      TIME_STEP=50
-      NUM_TIME_STEPS=100000
-      ;;
-    "PIK-IPLEX-2009")
-      TIME_STEP=50
-      NUM_TIME_STEPS=100000
-      ;;
-    "TU-Delft-2007")
-      TIME_STEP=50
-      NUM_TIME_STEPS=150000
-      ;;
-      
     *)
       TIME_STEP=20  # Default value
       NUM_TIME_STEPS=1500  # Default value
