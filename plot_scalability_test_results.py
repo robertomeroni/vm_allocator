@@ -71,11 +71,6 @@ def plot_data(data):
         xs = [p[0] for p in points]
         ys = [p[1] for p in points]
         
-        # Print x and y values for each algorithm
-        print(f"Algorithm: {algorithm}")
-        print(f"X values (PMs): {xs}")
-        print(f"Y values (Total Algorithm Runtime): {ys}\n")
-        
         # Use different line styles and markers for each model
         plt.plot(xs, ys, linestyle=line_styles[i % len(line_styles)], 
                  marker=markers[i % len(markers)], label=algorithm)
