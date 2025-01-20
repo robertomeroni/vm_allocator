@@ -45,10 +45,10 @@ from check import (
 from config import (
     MIGRATION_MODEL_INPUT_FOLDER_PATH,
     MIGRATION_MODEL_OUTPUT_FOLDER_PATH,
-    MINI_MODEL_INPUT_FOLDER_PATH,
-    MINI_MODEL_OUTPUT_FOLDER_PATH,
-    MODEL_INPUT_FOLDER_PATH,
-    MODEL_OUTPUT_FOLDER_PATH,
+    MICRO_MODEL_INPUT_FOLDER_PATH,
+    MICRO_MODEL_OUTPUT_FOLDER_PATH,
+    MACRO_MODEL_INPUT_FOLDER_PATH,
+    MACRO_MODEL_OUTPUT_FOLDER_PATH,
     OUTPUT_FOLDER_PATH,
     SAVE_VM_AND_PM_SETS,
 )
@@ -64,15 +64,15 @@ from filter import (
     get_fragmented_pms_list,
     is_pm_full,
     sort_key_load,
-    sort_key_specific_power_load,
+    sort_key_energy_intensity_load,
     split_dict_sorted,
     split_dict_unsorted,
 )
 from log import log_allocation, log_performance, log_vm_execution_time
-from mini import (
-    mini_reallocate_vms,
-    parse_mini_opl_output,
-    save_mini_model_input_format,
+from micro import (
+    micro_reallocate_vms,
+    parse_micro_opl_output,
+    save_micro_model_input_format,
 )
 from pm_manager import launch_pm_manager
 from utils import (
@@ -97,22 +97,22 @@ except NameError:
 
 
 @profile
-def run_main_model(
+def run_macro_model(
     vms,
     highest_fragmentation_pms,
     physical_machines,
     scheduled_vms,
     pms_to_turn_off_after_migration,
-    mini_model_max_pms,
-    mini_model_max_vms,
+    micro_model_max_pms,
+    micro_model_max_vms,
     step,
     time_step,
-    MODEL_INPUT_FOLDER_PATH,
+    MACRO_MODEL_INPUT_FOLDER_PATH,
     idle_power,
-    specific_power_function_database,
+    energy_intensity_database,
     nb_points,
-    hard_time_limit_main,
-    hard_time_limit_mini,
+    hard_time_limit_macro,
+    hard_time_limit_micro,
     performance_log_file,
     master_model,
 ):
@@ -127,36 +127,36 @@ def run_main_model(
             vms,
             highest_fragmentation_pms,
             step,
-            MODEL_INPUT_FOLDER_PATH,
-            specific_power_function_database,
+            MACRO_MODEL_INPUT_FOLDER_PATH,
+            energy_intensity_database,
             nb_points,
         )
 
         # Run CPLEX model
-        print(color_text(f"\nRunning main model for time step {step}...", Fore.YELLOW))
+        print(color_text(f"\nRunning maxi model for time step {step}...", Fore.YELLOW))
         start_time_opl = time.time()
         opl_output = run_opl_model(
             vm_model_input_file_path,
             pm_model_input_file_path,
-            MODEL_INPUT_FOLDER_PATH,
-            MODEL_OUTPUT_FOLDER_PATH,
+            MACRO_MODEL_INPUT_FOLDER_PATH,
+            MACRO_MODEL_OUTPUT_FOLDER_PATH,
             step,
-            "main",
-            hard_time_limit_main,
+            "macro",
+            hard_time_limit_macro,
         )
         end_time_opl = time.time()
 
         if opl_output is None:
             print(
                 color_text(
-                    f"\nOPL main model run exceeded time limit of {hard_time_limit_main} seconds. Exiting.",
+                    f"\nOPL macro model run exceeded time limit of {hard_time_limit_macro} seconds. Exiting.",
                     Fore.RED,
                 )
             )
             opl_output_valid = False
         else:
             print(
-                f"\nTime taken to run main model: {end_time_opl - start_time_opl} seconds"
+                f"\nTime taken to run macro model: {end_time_opl - start_time_opl} seconds"
             )
 
             opl_return_code = get_opl_return_code(opl_output)
@@ -214,7 +214,7 @@ def run_main_model(
 
             log_performance(
                 step,
-                "main",
+                "macro",
                 end_time_opl - start_time_opl,
                 "",
                 num_vms,
@@ -224,11 +224,11 @@ def run_main_model(
 
         else:
             print(
-                color_text(f"Invalid main OPL output for time step {step}...", Fore.RED)
+                color_text(f"Invalid macro OPL output for time step {step}...", Fore.RED)
             )
             log_performance(
                 step,
-                "main",
+                "macro",
                 end_time_opl - start_time_opl,
                 "not valid",
                 num_vms,
@@ -238,7 +238,7 @@ def run_main_model(
             if master_model != "hybrid":
                 non_allocated_vms = get_non_allocated_workload(vms, scheduled_vms)
 
-                launch_mini_model(
+                launch_micro_model(
                     vms,
                     non_allocated_vms,
                     scheduled_vms,
@@ -246,12 +246,12 @@ def run_main_model(
                     pms_to_turn_off_after_migration,
                     step,
                     time_step,
-                    mini_model_max_pms,
-                    mini_model_max_vms,
+                    micro_model_max_pms,
+                    micro_model_max_vms,
                     idle_power,
-                    specific_power_function_database,
+                    energy_intensity_database,
                     nb_points,
-                    hard_time_limit_mini,
+                    hard_time_limit_micro,
                     performance_log_file,
                 )
 
@@ -259,54 +259,54 @@ def run_main_model(
         print(color_text(f"\nNo available PMs for time step {step}...", Fore.YELLOW))
 
 
-def launch_main_model(
+def launch_macro_model(
     active_vms,
     scheduled_vms,
     physical_machines_on,
     pms_to_turn_off_after_migration,
-    main_model_max_subsets,
-    main_model_max_pms,
-    mini_model_max_pms,
-    mini_model_max_vms,
+    macro_model_max_subsets,
+    macro_model_max_pms,
+    micro_model_max_pms,
+    micro_model_max_vms,
     idle_power,
     step,
     time_step,
-    specific_power_function_database,
+    energy_intensity_database,
     nb_points,
-    hard_time_limit_main,
-    hard_time_limit_mini,
+    hard_time_limit_macro,
+    hard_time_limit_micro,
     performance_log_file,
     master_model,
 ):
     physical_machines = physical_machines_on.copy()
 
-    for _ in range(main_model_max_subsets):
+    for _ in range(macro_model_max_subsets):
         if physical_machines_on:
             filter_full_and_migrating_pms(active_vms, physical_machines_on)
             if physical_machines_on:
                 highest_fragmentation_pms = filter_fragmented_pms(
-                    physical_machines_on, main_model_max_pms
+                    physical_machines_on, macro_model_max_pms
                 )
                 filtered_vms = filter_vms_on_pms_and_non_allocated(
                     active_vms, highest_fragmentation_pms, scheduled_vms
                 )
                 if filtered_vms:
-                    run_main_model(
+                    run_macro_model(
                         filtered_vms,
                         highest_fragmentation_pms,
                         physical_machines,
                         scheduled_vms,
                         pms_to_turn_off_after_migration,
-                        mini_model_max_pms,
-                        mini_model_max_vms,
+                        micro_model_max_pms,
+                        micro_model_max_vms,
                         step,
                         time_step,
-                        MODEL_INPUT_FOLDER_PATH,
+                        MACRO_MODEL_INPUT_FOLDER_PATH,
                         idle_power,
-                        specific_power_function_database,
+                        energy_intensity_database,
                         nb_points,
-                        hard_time_limit_main,
-                        hard_time_limit_mini,
+                        hard_time_limit_macro,
+                        hard_time_limit_micro,
                         performance_log_file,
                         master_model,
                     )
@@ -317,28 +317,28 @@ def launch_main_model(
 
 
 @profile
-def run_mini_model(
+def run_micro_model(
     active_vms,
     non_allocated_vms,
     physical_machines_on,
     step,
     time_step,
-    mini_model_input_folder_path,
-    mini_model_output_folder_path,
+    micro_model_input_folder_path,
+    micro_model_output_folder_path,
     idle_power,
-    specific_power_function_database,
+    energy_intensity_database,
     nb_points,
-    hard_time_limit_mini,
+    hard_time_limit_micro,
     performance_log_file,
 ):
     # Convert into model input format
-    mini_vm_model_input_file_path, mini_pm_model_input_file_path = (
-        save_mini_model_input_format(
+    micro_vm_model_input_file_path, micro_pm_model_input_file_path = (
+        save_micro_model_input_format(
             non_allocated_vms,
             physical_machines_on,
             step,
-            mini_model_input_folder_path,
-            specific_power_function_database,
+            micro_model_input_folder_path,
+            energy_intensity_database,
             nb_points,
         )
     )
@@ -347,30 +347,30 @@ def run_mini_model(
     num_pms = len(physical_machines_on)
 
     # Run CPLEX model
-    print(color_text(f"\nRunning mini model for time step {step}...", Fore.YELLOW))
+    print(color_text(f"\nRunning micro model for time step {step}...", Fore.YELLOW))
     start_time_opl = time.time()
     opl_output = run_opl_model(
-        mini_vm_model_input_file_path,
-        mini_pm_model_input_file_path,
-        MINI_MODEL_INPUT_FOLDER_PATH,
-        mini_model_output_folder_path,
+        micro_vm_model_input_file_path,
+        micro_pm_model_input_file_path,
+        MICRO_MODEL_INPUT_FOLDER_PATH,
+        micro_model_output_folder_path,
         step,
-        "mini",
-        hard_time_limit_mini,
+        "micro",
+        hard_time_limit_micro,
     )
     end_time_opl = time.time()
 
     if opl_output is None:
         print(
             color_text(
-                f"\nOPL mini model run exceeded time limit of {hard_time_limit_mini} seconds. Exiting.",
+                f"\nOPL micro model run exceeded time limit of {hard_time_limit_micro} seconds. Exiting.",
                 Fore.RED,
             )
         )
         opl_output_valid = False
     else:
         print(
-            f"\nTime taken to run mini model: {end_time_opl - start_time_opl} seconds"
+            f"\nTime taken to run micro model: {end_time_opl - start_time_opl} seconds"
         )
 
         opl_return_code = get_opl_return_code(opl_output)
@@ -378,15 +378,15 @@ def run_mini_model(
 
     if opl_output_valid:
         # Parse OPL output and reallocate VMs
-        parsed_data = parse_mini_opl_output(opl_output)
+        parsed_data = parse_micro_opl_output(opl_output)
         partial_allocation = parsed_data.get("allocation")
         vm_ids = parsed_data["vm_ids"]
         pm_ids = parsed_data["pm_ids"]
 
-        mini_reallocate_vms(vm_ids, pm_ids, partial_allocation, active_vms)
+        micro_reallocate_vms(vm_ids, pm_ids, partial_allocation, active_vms)
         log_performance(
             step,
-            "mini",
+            "micro",
             end_time_opl - start_time_opl,
             "",
             num_vms,
@@ -395,11 +395,11 @@ def run_mini_model(
         )
     else:
         print(
-            color_text(f"\nInvalid mini OPL output for time step {step}...", Fore.RED)
+            color_text(f"\nInvalid micro OPL output for time step {step}...", Fore.RED)
         )
         log_performance(
             step,
-            "mini",
+            "micro",
             end_time_opl - start_time_opl,
             "not valid",
             num_vms,
@@ -412,7 +412,7 @@ def run_mini_model(
 
 
 @profile
-def launch_mini_model(
+def launch_micro_model(
     active_vms,
     non_allocated_vms,
     scheduled_vms,
@@ -420,18 +420,18 @@ def launch_mini_model(
     pms_to_turn_off_after_migration,
     step,
     time_step,
-    mini_model_max_pms,
-    mini_model_max_vms,
+    micro_model_max_pms,
+    micro_model_max_vms,
     idle_power,
-    specific_power_function_database,
+    energy_intensity_database,
     nb_points,
-    hard_time_limit_mini,
+    hard_time_limit_micro,
     performance_log_file,
 ):
     if non_allocated_vms:
-        if mini_model_max_vms and len(non_allocated_vms) > mini_model_max_vms:
+        if micro_model_max_vms and len(non_allocated_vms) > micro_model_max_vms:
             non_allocated_vms_subsets = split_dict_unsorted(
-                non_allocated_vms, mini_model_max_vms
+                non_allocated_vms, micro_model_max_vms
             )
         else:
             non_allocated_vms_subsets = [non_allocated_vms]
@@ -445,14 +445,14 @@ def launch_mini_model(
             if physical_machines_on:
                 # Determine PM subset
                 if (
-                    mini_model_max_pms
-                    and len(physical_machines_on) > mini_model_max_pms
+                    micro_model_max_pms
+                    and len(physical_machines_on) > micro_model_max_pms
                 ):
                     physical_machines_on_subsets = split_dict_sorted(
                         physical_machines_on,
-                        mini_model_max_pms,
-                        sort_key_specific_power_load,
-                        specific_power_function_database,
+                        micro_model_max_pms,
+                        sort_key_energy_intensity_load,
+                        energy_intensity_database,
                     )
                 else:
                     physical_machines_on_subsets = [physical_machines_on]
@@ -466,28 +466,28 @@ def launch_mini_model(
                         non_allocated_vms = non_allocated_vms_subset
 
                     if non_allocated_vms:
-                        mini_model_input_folder_path = os.path.join(
-                            MINI_MODEL_INPUT_FOLDER_PATH, f"step_{step}/subset_{index}"
+                        micro_model_input_folder_path = os.path.join(
+                            MICRO_MODEL_INPUT_FOLDER_PATH, f"step_{step}/subset_{index}"
                         )
-                        mini_model_output_folder_path = os.path.join(
-                            MINI_MODEL_OUTPUT_FOLDER_PATH, f"step_{step}/subset_{index}"
+                        micro_model_output_folder_path = os.path.join(
+                            MICRO_MODEL_OUTPUT_FOLDER_PATH, f"step_{step}/subset_{index}"
                         )
 
-                        os.makedirs(mini_model_input_folder_path, exist_ok=True)
-                        os.makedirs(mini_model_output_folder_path, exist_ok=True)
+                        os.makedirs(micro_model_input_folder_path, exist_ok=True)
+                        os.makedirs(micro_model_output_folder_path, exist_ok=True)
 
-                        run_mini_model(
+                        run_micro_model(
                             active_vms,
                             non_allocated_vms,
                             pm_subset,
                             step,
                             time_step,
-                            mini_model_input_folder_path,
-                            mini_model_output_folder_path,
+                            micro_model_input_folder_path,
+                            micro_model_output_folder_path,
                             idle_power,
-                            specific_power_function_database,
+                            energy_intensity_database,
                             nb_points,
-                            hard_time_limit_mini,
+                            hard_time_limit_micro,
                             performance_log_file,
                         )
 
@@ -514,19 +514,19 @@ def run_migration_model(
     step,
     migration_model_input_folder_path,
     migration_model_output_folder_path,
-    specific_power_function_database,
+    energy_intensity_database,
     nb_points,
     hard_time_limit_migration,
 ):
 
     # Convert into model input format
     migration_vm_model_input_file_path, migration_pm_model_input_file_path = (
-        save_mini_model_input_format(
+        save_micro_model_input_format(
             non_allocated_vms,
             physical_machines_on,
             step,
             migration_model_input_folder_path,
-            specific_power_function_database,
+            energy_intensity_database,
             nb_points,
         )
     )
@@ -548,7 +548,7 @@ def run_migration_model(
         return None, None, None, end_time_opl - start_time_opl
 
     # Parse OPL output and reallocate VMs
-    parsed_data = parse_mini_opl_output(opl_output)
+    parsed_data = parse_micro_opl_output(opl_output)
     partial_allocation = parsed_data.get("allocation")
     vm_ids = parsed_data.get("vm_ids")
     pm_ids = parsed_data.get("pm_ids")
@@ -567,7 +567,7 @@ def launch_migration_model(
     step,
     time_step,
     migration_model_max_fragmented_pms,
-    specific_power_function_database,
+    energy_intensity_database,
     nb_points,
     performance_log_file,
     hard_time_limit_migration,
@@ -629,7 +629,7 @@ def launch_migration_model(
                         step,
                         migration_model_input_folder_path,
                         migration_model_output_folder_path,
-                        specific_power_function_database,
+                        energy_intensity_database,
                         nb_points,
                         hard_time_limit_migration,
                     )
@@ -708,7 +708,7 @@ def run_load_balancer(
     active_vms,
     physical_machines_on,
     pms_to_turn_off_after_migration,
-    specific_power_function_database,
+    energy_intensity_database,
     step,
     performance_log_file,
 ):
@@ -743,7 +743,7 @@ def run_load_balancer(
                 continue
             vms_on_pm_max = vms_on_pms[pm_max["id"]]
             load_balancer(
-                vms_on_pm_max, pm_max, pm_min, specific_power_function_database
+                vms_on_pm_max, pm_max, pm_min, energy_intensity_database
             )
 
     load_balancer_end_time = time.time()
@@ -1059,7 +1059,7 @@ def simulate_time_steps(
     nb_points,
     power_function_database,
     speed_function_database,
-    specific_power_function_database,
+    energy_intensity_database,
     log_folder_path,
     vms_trace_file,
     performance_log_file,
@@ -1071,15 +1071,15 @@ def simulate_time_steps(
     print_to_console,
     save_logs,
     starting_step,
-    main_model_max_subsets,
-    main_model_max_pms,
-    mini_model_max_pms,
-    mini_model_max_vms,
+    macro_model_max_subsets,
+    macro_model_max_pms,
+    micro_model_max_pms,
+    micro_model_max_vms,
     migration_model_max_fragmented_pms,
     failed_migrations_limit,
     pm_manager_max_pms,
-    hard_time_limit_main,
-    hard_time_limit_mini,
+    hard_time_limit_macro,
+    hard_time_limit_micro,
     hard_time_limit_migration,
     new_vms_pattern,
 ):
@@ -1189,7 +1189,7 @@ def simulate_time_steps(
             model_to_run = master_model
 
         if master_model in [
-            "main",
+            "maxi",
             "mini",
             "hybrid",
             "compound",
@@ -1221,24 +1221,24 @@ def simulate_time_steps(
             model_to_run = "none"
 
         # Call the appropriate model function
-        if model_to_run == "main":
+        if model_to_run == "maxi":
             start_time = time.time()
-            launch_main_model(
+            launch_macro_model(
                 active_vms,
                 scheduled_vms,
                 physical_machines_on,
                 pms_to_turn_off_after_migration,
-                main_model_max_subsets,
-                main_model_max_pms,
-                mini_model_max_pms,
-                mini_model_max_vms,
+                macro_model_max_subsets,
+                macro_model_max_pms,
+                micro_model_max_pms,
+                micro_model_max_vms,
                 idle_power,
                 step,
                 time_step,
-                specific_power_function_database,
+                energy_intensity_database,
                 nb_points,
-                hard_time_limit_main,
-                hard_time_limit_mini,
+                hard_time_limit_macro,
+                hard_time_limit_micro,
                 performance_log_file,
                 master_model,
             )
@@ -1248,7 +1248,7 @@ def simulate_time_steps(
             non_allocated_vms = get_non_allocated_workload(active_vms, scheduled_vms)
 
             start_time = time.time()
-            launch_mini_model(
+            launch_micro_model(
                 active_vms,
                 non_allocated_vms,
                 scheduled_vms,
@@ -1256,12 +1256,12 @@ def simulate_time_steps(
                 pms_to_turn_off_after_migration,
                 step,
                 time_step,
-                mini_model_max_pms,
-                mini_model_max_vms,
+                micro_model_max_pms,
+                micro_model_max_vms,
                 idle_power,
-                specific_power_function_database,
+                energy_intensity_database,
                 nb_points,
-                hard_time_limit_mini,
+                hard_time_limit_micro,
                 performance_log_file,
             )
             end_time = time.time()
@@ -1270,7 +1270,7 @@ def simulate_time_steps(
             non_allocated_vms = get_non_allocated_workload(active_vms, scheduled_vms)
 
             start_time = time.time()
-            launch_mini_model(
+            launch_micro_model(
                 active_vms,
                 non_allocated_vms,
                 scheduled_vms,
@@ -1278,30 +1278,30 @@ def simulate_time_steps(
                 pms_to_turn_off_after_migration,
                 step,
                 time_step,
-                mini_model_max_pms,
-                mini_model_max_vms,
+                micro_model_max_pms,
+                micro_model_max_vms,
                 idle_power,
-                specific_power_function_database,
+                energy_intensity_database,
                 nb_points,
-                hard_time_limit_mini,
+                hard_time_limit_micro,
                 performance_log_file,
             )
-            launch_main_model(
+            launch_macro_model(
                 active_vms,
                 scheduled_vms,
                 physical_machines_on,
                 pms_to_turn_off_after_migration,
-                main_model_max_subsets,
-                main_model_max_pms,
-                mini_model_max_pms,
-                mini_model_max_vms,
+                macro_model_max_subsets,
+                macro_model_max_pms,
+                micro_model_max_pms,
+                micro_model_max_vms,
                 idle_power,
                 step,
                 time_step,
-                specific_power_function_database,
+                energy_intensity_database,
                 nb_points,
-                hard_time_limit_main,
-                hard_time_limit_mini,
+                hard_time_limit_macro,
+                hard_time_limit_micro,
                 performance_log_file,
                 master_model,
             )
@@ -1311,7 +1311,7 @@ def simulate_time_steps(
             non_allocated_vms = get_non_allocated_workload(active_vms, scheduled_vms)
 
             start_time = time.time()
-            launch_mini_model(
+            launch_micro_model(
                 active_vms,
                 non_allocated_vms,
                 scheduled_vms,
@@ -1319,12 +1319,12 @@ def simulate_time_steps(
                 pms_to_turn_off_after_migration,
                 step,
                 time_step,
-                mini_model_max_pms,
-                mini_model_max_vms,
+                micro_model_max_pms,
+                micro_model_max_vms,
                 idle_power,
-                specific_power_function_database,
+                energy_intensity_database,
                 nb_points,
-                hard_time_limit_mini,
+                hard_time_limit_micro,
                 performance_log_file,
             )
 
@@ -1335,7 +1335,7 @@ def simulate_time_steps(
                 step,
                 time_step,
                 migration_model_max_fragmented_pms,
-                specific_power_function_database,
+                energy_intensity_database,
                 nb_points,
                 performance_log_file,
                 hard_time_limit_migration,
@@ -1375,7 +1375,7 @@ def simulate_time_steps(
             non_allocated_vms = get_non_allocated_workload(active_vms, scheduled_vms)
 
             start_time = time.time()
-            launch_mini_model(
+            launch_micro_model(
                 active_vms,
                 non_allocated_vms,
                 scheduled_vms,
@@ -1383,12 +1383,12 @@ def simulate_time_steps(
                 pms_to_turn_off_after_migration,
                 step,
                 time_step,
-                mini_model_max_pms,
-                mini_model_max_vms,
+                micro_model_max_pms,
+                micro_model_max_vms,
                 idle_power,
-                specific_power_function_database,
+                energy_intensity_database,
                 nb_points,
-                hard_time_limit_mini,
+                hard_time_limit_micro,
                 performance_log_file,
             )
 
@@ -1399,7 +1399,7 @@ def simulate_time_steps(
                 step,
                 time_step,
                 migration_model_max_fragmented_pms,
-                specific_power_function_database,
+                energy_intensity_database,
                 nb_points,
                 performance_log_file,
                 hard_time_limit_migration,
@@ -1439,7 +1439,7 @@ def simulate_time_steps(
                     active_vms,
                     physical_machines_on_copy,
                     pms_to_turn_off_after_migration,
-                    specific_power_function_database,
+                    energy_intensity_database,
                     step,
                     performance_log_file,
                 )
@@ -1524,7 +1524,7 @@ def simulate_time_steps(
             print(color_text(f"\nNo model to run for time step {step}...", Fore.YELLOW))
 
         if master_model in [
-            "main",
+            "maxi",
             "mini",
             "hybrid",
             "compound",
@@ -1543,7 +1543,7 @@ def simulate_time_steps(
                 is_on,
                 step,
                 time_step,
-                specific_power_function_database,
+                energy_intensity_database,
                 nb_points,
                 scheduled_vms,
                 pms_to_turn_off_after_migration,

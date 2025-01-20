@@ -53,10 +53,10 @@ fi
 export NO_COLOR=1
 
 # Clean up previous simulation files
-rm -rf ./simulation/model_input_main         \
-       ./simulation/model_output_main        \
-       ./simulation/model_input_mini         \
-       ./simulation/model_output_mini        \
+rm -rf ./simulation/model_input_macro         \
+       ./simulation/model_output_macro        \
+       ./simulation/model_input_micro         \
+       ./simulation/model_output_micro       \
        ./simulation/model_input_migration    \
        ./simulation/model_output_migration   \
        ./simulation/pm_manager               \

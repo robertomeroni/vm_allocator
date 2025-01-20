@@ -207,7 +207,7 @@ def count_non_valid_entries(performance_log_file):
 
     with open(performance_log_file, "r") as file:
         for line in file:
-            if "main" in line or "mini" in line:
+            if "macro" in line or "micro" in line:
                 total_entries += 1
                 if "not valid" in line:
                     non_valid_entries += 1

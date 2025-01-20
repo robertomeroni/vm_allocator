@@ -3,7 +3,7 @@ import re
 
 from utils import (
     convert_pms_to_model_input_format,
-    convert_specific_power_function_to_model_input_format,
+    convert_energy_intensity_to_model_input_format,
     convert_vms_to_model_input_format,
     parse_matrix,
 )
@@ -17,8 +17,8 @@ except NameError:
 
 
 @profile
-def save_mini_model_input_format(
-    vms, pms, step, model_input_folder_path, specific_power_function_database, nb_points
+def save_micro_model_input_format(
+    vms, pms, step, model_input_folder_path, energy_intensity_database, nb_points
 ):
     # Ensure the directory exists
     os.makedirs(model_input_folder_path, exist_ok=True)
@@ -35,9 +35,9 @@ def save_mini_model_input_format(
     # Convert data to the required format
     formatted_vms = convert_vms_to_model_input_format(vms)
     formatted_pms = convert_pms_to_model_input_format(pms)
-    formatted_specific_power_function = (
-        convert_specific_power_function_to_model_input_format(
-            pms, specific_power_function_database, nb_points
+    formatted_energy_intensity = (
+        convert_energy_intensity_to_model_input_format(
+            pms, energy_intensity_database, nb_points
         )
     )
 
@@ -45,15 +45,15 @@ def save_mini_model_input_format(
     with open(vm_model_input_file_path, "w") as vm_file:
         vm_file.write(formatted_vms)
 
-    # Write formatted PMs and specific_power function to file
+    # Write formatted PMs and energy_intensity function to file
     with open(pm_model_input_file_path, "w") as pm_file:
         pm_file.write(formatted_pms)
-        pm_file.write(formatted_specific_power_function)
+        pm_file.write(formatted_energy_intensity)
 
     return vm_model_input_file_path, pm_model_input_file_path
 
 
-def parse_mini_opl_output(output):
+def parse_micro_opl_output(output):
     parsed_data = {}
 
     patterns = {
@@ -78,7 +78,7 @@ def parse_mini_opl_output(output):
     return parsed_data
 
 
-def mini_reallocate_vms(vm_ids, pm_ids, allocation, non_allocated_vms):
+def micro_reallocate_vms(vm_ids, pm_ids, allocation, non_allocated_vms):
     for vm_index, vm_id in enumerate(vm_ids):
         vm = non_allocated_vms.get(vm_id)
         vm["allocation"]["pm"] = -1

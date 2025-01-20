@@ -154,10 +154,10 @@ numeric_columns = [
     'Profit Margin (%)', 'Energy Efficiency',
     'Total Energy Consumption Ratio',
     'Avg Wait Time (steps)', 'Runtime Efficiency', 'Overall Time Efficiency',
-    'SEED_NUMBER', 'NEW_VMS_PER_STEP', 'MAIN_MODEL_PERIOD', 'MINI_MODEL_PERIOD',
+    'SEED_NUMBER', 'NEW_VMS_PER_STEP', 'MACRO_MODEL_PERIOD', 'MICRO_MODEL_PERIOD',
     'safety_margin', 'step_window_for_online_prediction', 'step_window_for_weights_accuracy',
-    'w_concurrent_migrations', 'CPLEX_TIME_LIMIT_MAIN', 'CPLEX_OPTIMALITY_GAP_MAIN',
-    'CPLEX_TIME_LIMIT_MINI', 'CPLEX_OPTIMALITY_GAP_MINI',
+    'w_concurrent_migrations', 'CPLEX_TIME_LIMIT_MACRO', 'CPLEX_OPTIMALITY_GAP_MACRO',
+    'CPLEX_TIME_LIMIT_MICRO', 'CPLEX_OPTIMALITY_GAP_MICRO',
 ]
 
 for col in numeric_columns:
@@ -339,36 +339,4 @@ with open(os.path.join(output_folder, output_filename), 'w') as f:
 
 print(f"HTML report generated: {output_filename}")
 
-# After generating the HTML report, add the following code to print metrics
-for workload_data in workloads_data:
-    workload_name = workload_data['name']
-    df_workload = df[df[groupby_workload] == workload_name]
-
-    # Group by the model within each workload
-    for model_name, df_model in df_workload.groupby('MASTER_MODEL'):
-        # Calculate the required metrics for each model
-        total_profit = df_model['Net Profit'].sum()
-        total_completed_migrations = df_model['Completed Migrations'].sum()
-        total_energy_consumption = df_model['Total Energy Consumption (kWh)'].sum()
-        average_energy_efficiency = df_model['Energy Efficiency'].mean()
-        total_time_to_run = df_model['Time Taken (s)'].sum()
-
-        # Print the metrics for each model
-        print(f"\nMetrics for {groupby_workload}: {workload_name}, Model: {model_name}")
-        print(f"Total Profit: ${total_profit:,.2f}")
-        print(f"Completed Migrations: {total_completed_migrations}")
-        print(f"Total Energy Consumption: {total_energy_consumption:.2f} kWh")
-        print(f"Average Energy Efficiency: {average_energy_efficiency:.2f}")
-        print(f"Total Time to Run the Model: {total_time_to_run:.2f} seconds")
-
-# Define model groups
-main_mini_hybrid_compound_multilayer = ['main', 'mini', 'hybrid', 'compound', 'multilayer']
-shi_models = ['shi om', 'shi ac', 'shi pu', 'lago']
-
-# Metrics to print
-metrics_to_print = [
-    'Net Profit', 
-    'Total Energy Consumption (kWh)', 
-    'Energy Efficiency', 
-]
 

@@ -17,7 +17,7 @@ from utils import (
     load_physical_machines,
     load_pm_database,
     load_virtual_machines,
-    save_specific_power_function,
+    save_energy_intensity,
 )
 
 # Parse command-line arguments
@@ -50,13 +50,13 @@ except Exception as e:
 INITIAL_VMS_FILE = getattr(config, "INITIAL_VMS_FILE", None)
 INITIAL_PMS_FILE = getattr(config, "INITIAL_PMS_FILE", None)
 PM_DATABASE_FILE = getattr(config, "PM_DATABASE_FILE", None)
-SPECIFIC_POWER_FUNCTION_FILE = getattr(config, "SPECIFIC_POWER_FUNCTION_FILE", None)
+ENERGY_INTENSITY_FILE = getattr(config, "ENERGY_INTENSITY_FILE", None)
 SIMULATION_INPUT_FOLDER_PATH = getattr(config, "SIMULATION_INPUT_FOLDER_PATH", None)
 OUTPUT_FOLDER_PATH = getattr(config, "OUTPUT_FOLDER_PATH", None)
-MODEL_INPUT_FOLDER_PATH = getattr(config, "MODEL_INPUT_FOLDER_PATH", None)
-MODEL_OUTPUT_FOLDER_PATH = getattr(config, "MODEL_OUTPUT_FOLDER_PATH", None)
-MINI_MODEL_INPUT_FOLDER_PATH = getattr(config, "MINI_MODEL_INPUT_FOLDER_PATH", None)
-MINI_MODEL_OUTPUT_FOLDER_PATH = getattr(config, "MINI_MODEL_OUTPUT_FOLDER_PATH", None)
+MACRO_MODEL_INPUT_FOLDER_PATH = getattr(config, "MACRO_MODEL_INPUT_FOLDER_PATH", None)
+MACRO_MODEL_OUTPUT_FOLDER_PATH = getattr(config, "MACRO_MODEL_OUTPUT_FOLDER_PATH", None)
+MICRO_MODEL_INPUT_FOLDER_PATH = getattr(config, "MICRO_MODEL_INPUT_FOLDER_PATH", None)
+MICRO_MODEL_OUTPUT_FOLDER_PATH = getattr(config, "MICRO_MODEL_OUTPUT_FOLDER_PATH", None)
 MIGRATION_MODEL_INPUT_FOLDER_PATH = getattr(
     config, "MIGRATION_MODEL_INPUT_FOLDER_PATH", None
 )
@@ -81,21 +81,21 @@ SAVE_LOGS = getattr(config, "SAVE_LOGS", None)
 SAVE_VM_AND_PM_SETS = getattr(config, "SAVE_VM_AND_PM_SETS", None)
 MASTER_MODEL = getattr(config, "MASTER_MODEL", None)
 USE_LOAD_BALANCER = getattr(config, "USE_LOAD_BALANCER", None)
-MAIN_MODEL_MAX_PMS = getattr(config, "MAIN_MODEL_MAX_PMS", None)
-MAIN_MODEL_MAX_SUBSETS = getattr(config, "MAIN_MODEL_MAX_SUBSETS", None)
-MINI_MODEL_MAX_PMS = getattr(config, "MINI_MODEL_MAX_PMS", None)
-MINI_MODEL_MAX_VMS = getattr(config, "MINI_MODEL_MAX_VMS", None)
+MACRO_MODEL_MAX_PMS = getattr(config, "MACRO_MODEL_MAX_PMS", None)
+MACRO_MODEL_MAX_SUBSETS = getattr(config, "MACRO_MODEL_MAX_SUBSETS", None)
+MICRO_MODEL_MAX_PMS = getattr(config, "MICRO_MODEL_MAX_PMS", None)
+MICRO_MODEL_MAX_VMS = getattr(config, "MICRO_MODEL_MAX_VMS", None)
 MIGRATION_MODEL_MAX_FRAGMENTED_PMS = getattr(
     config, "MIGRATION_MODEL_MAX_FRAGMENTED_PMS", None
 )
 FAILED_MIGRATIONS_LIMIT = getattr(config, "FAILED_MIGRATIONS_LIMIT", None)
 PM_MANAGER_MAX_PMS = getattr(config, "PM_MANAGER_MAX_PMS", None)
-EPGAP_MAIN = getattr(config, "EPGAP_MAIN", None)
-EPGAP_MINI = getattr(config, "EPGAP_MINI", None)
+EPGAP_MACRO = getattr(config, "EPGAP_MACRO", None)
+EPGAP_MICRO = getattr(config, "EPGAP_MICRO", None)
 EPGAP_MIGRATION = getattr(config, "EPGAP_MIGRATION", None)
 EPGAP_PM_MANAGER = getattr(config, "EPGAP_PM_MANAGER", None)
-HARD_TIME_LIMIT_MAIN = getattr(config, "HARD_TIME_LIMIT_MAIN", None)
-HARD_TIME_LIMIT_MINI = getattr(config, "HARD_TIME_LIMIT_MINI", None)
+HARD_TIME_LIMIT_MACRO = getattr(config, "HARD_TIME_LIMIT_MACRO", None)
+HARD_TIME_LIMIT_MICRO = getattr(config, "HARD_TIME_LIMIT_MICRO", None)
 HARD_TIME_LIMIT_MIGRATION = getattr(config, "HARD_TIME_LIMIT_MIGRATION", None)
 
 # Set VMS_TRACE_FILE if --trace argument is provided
@@ -120,10 +120,10 @@ if USE_RANDOM_SEED:
 
 # Ensure the directories exist
 os.makedirs(OUTPUT_FOLDER_PATH, exist_ok=True)
-os.makedirs(MODEL_INPUT_FOLDER_PATH, exist_ok=True)
-os.makedirs(MODEL_OUTPUT_FOLDER_PATH, exist_ok=True)
-os.makedirs(MINI_MODEL_INPUT_FOLDER_PATH, exist_ok=True)
-os.makedirs(MINI_MODEL_OUTPUT_FOLDER_PATH, exist_ok=True)
+os.makedirs(MACRO_MODEL_INPUT_FOLDER_PATH, exist_ok=True)
+os.makedirs(MACRO_MODEL_OUTPUT_FOLDER_PATH, exist_ok=True)
+os.makedirs(MICRO_MODEL_INPUT_FOLDER_PATH, exist_ok=True)
+os.makedirs(MICRO_MODEL_OUTPUT_FOLDER_PATH, exist_ok=True)
 os.makedirs(SIMULATION_INPUT_FOLDER_PATH, exist_ok=True)
 
 if os.path.expanduser(INITIAL_PMS_FILE) != os.path.join(SIMULATION_INPUT_FOLDER_PATH, os.path.basename(INITIAL_PMS_FILE)):
@@ -140,19 +140,19 @@ if __name__ == "__main__":
     initial_pms = load_physical_machines(os.path.expanduser(INITIAL_PMS_FILE))
     log_folder_path, performance_log_file, vm_execution_time_file = create_log_folder()
     log_initial_physical_machines(initial_pms, log_folder_path)
-    load_configuration(MODEL_INPUT_FOLDER_PATH, EPGAP_MAIN)
-    load_configuration(MINI_MODEL_INPUT_FOLDER_PATH, EPGAP_MINI)
+    load_configuration(MACRO_MODEL_INPUT_FOLDER_PATH, EPGAP_MACRO)
+    load_configuration(MICRO_MODEL_INPUT_FOLDER_PATH, EPGAP_MICRO)
     load_configuration(MIGRATION_MODEL_INPUT_FOLDER_PATH, EPGAP_MIGRATION)
     load_configuration(PM_MANAGER_INPUT_FOLDER_PATH, EPGAP_PM_MANAGER)
 
-    save_specific_power_function(os.path.expanduser(INITIAL_PMS_FILE))
+    save_energy_intensity(os.path.expanduser(INITIAL_PMS_FILE))
     (
         pm_database,
         power_function_database,
         speed_function_database,
-        specific_power_function_database,
+        energy_intensity_database,
     ) = load_pm_database(COMPOSITION, COMPOSITION_SHAPE)
-    nb_points = len(next(iter(specific_power_function_database.values())))
+    nb_points = len(next(iter(energy_intensity_database.values())))
 
     (
         total_revenue,
@@ -175,7 +175,7 @@ if __name__ == "__main__":
         nb_points,
         power_function_database,
         speed_function_database,
-        specific_power_function_database,
+        energy_intensity_database,
         log_folder_path,
         VMS_TRACE_FILE,
         performance_log_file,
@@ -187,15 +187,15 @@ if __name__ == "__main__":
         PRINT_TO_CONSOLE,
         SAVE_LOGS,
         STARTING_STEP,
-        MAIN_MODEL_MAX_SUBSETS,
-        MAIN_MODEL_MAX_PMS,
-        MINI_MODEL_MAX_PMS,
-        MINI_MODEL_MAX_VMS,
+        MACRO_MODEL_MAX_SUBSETS,
+        MACRO_MODEL_MAX_PMS,
+        MICRO_MODEL_MAX_PMS,
+        MICRO_MODEL_MAX_VMS,
         MIGRATION_MODEL_MAX_FRAGMENTED_PMS,
         FAILED_MIGRATIONS_LIMIT,
         PM_MANAGER_MAX_PMS,
-        HARD_TIME_LIMIT_MAIN,
-        HARD_TIME_LIMIT_MINI,
+        HARD_TIME_LIMIT_MACRO,
+        HARD_TIME_LIMIT_MICRO,
         HARD_TIME_LIMIT_MIGRATION,
         NEW_VMS_PATTERN,
     )

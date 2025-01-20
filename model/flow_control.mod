@@ -2,25 +2,25 @@ string model_name = ...;
 
 main {
   var model_name = thisOplModel.dataElements.model_name;
-  if (model_name == "main") {
-  	writeln("\nMAIN MODEL\n")
-    var inputFolderPath = "simulation/model_input_main/";
-    var modelFile = "vm_allocation.mod";
+  if (model_name == "macro") {
+  	writeln("\nMACRO MODEL\n")
+    var inputFolderPath = "simulation/model_input_macro/";
+    var modelFile = "macro.mod";
   }    
-  else if (model_name == "mini") {
-  	writeln("\nMINI MODEL\n")
-    var inputFolderPath = "simulation/model_input_mini/";
-    var modelFile = "vm_allocation_mini.mod";
+  else if (model_name == "micro") {
+  	writeln("\nMICRO MODEL\n")
+    var inputFolderPath = "simulation/model_input_micro/";
+    var modelFile = "micro.mod";
   }    
   else if (model_name == "migration") {
   	writeln("\nMIGRATION MODEL\n")
     var inputFolderPath = "simulation/model_input_migration/";
-    var modelFile = "vm_allocation_mini.mod";
+    var modelFile = "micro.mod";
   }    
   else if (model_name == "pm_manager") {
   	writeln("\nPM MANAGER\n")
     var inputFolderPath = "simulation/pm_manager/input/";
-    var modelFile = "vm_allocation_mini.mod";
+    var modelFile = "micro.mod";
   }    
 
   // Define file names
@@ -51,7 +51,7 @@ main {
   model.generate();
   
     // Set initial solution
-  if (model_name == "main") {
+  if (model_name == "macro") {
   	writeln("\nSetting initial solution...\n")
   	
   	var is_allocation_vec = new IloOplCplexVectors();

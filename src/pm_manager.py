@@ -3,9 +3,9 @@ import time
 
 from allocation import get_non_allocated_workload, get_pms_on_schedule, run_opl_model
 from config import PM_MANAGER_INPUT_FOLDER_PATH, PM_MANAGER_OUTPUT_FOLDER_PATH
-from filter import sort_key_specific_power_capacity, split_dict_sorted
+from filter import sort_key_energy_intensity_capacity, split_dict_sorted
 from log import log_performance
-from mini import parse_mini_opl_output, save_mini_model_input_format
+from micro import parse_micro_opl_output, save_micro_model_input_format
 
 try:
     profile  # type: ignore
@@ -46,7 +46,7 @@ def pm_manager(
     non_allocated_vms,
     physical_machines_off,
     step,
-    specific_power_function_database,
+    energy_intensity_database,
     nb_points,
     performance_log_file,
     is_on,
@@ -56,13 +56,13 @@ def pm_manager(
 ):
 
     # Convert into model input format
-    mini_vm_model_input_file_path, mini_pm_model_input_file_path = (
-        save_mini_model_input_format(
+    micro_vm_model_input_file_path, micro_pm_model_input_file_path = (
+        save_micro_model_input_format(
             non_allocated_vms,
             physical_machines_off,
             step,
             pm_manager_input_folder_path,
-            specific_power_function_database,
+            energy_intensity_database,
             nb_points,
         )
     )
@@ -72,8 +72,8 @@ def pm_manager(
 
     start_time_opl = time.time()
     opl_output = run_opl_model(
-        mini_vm_model_input_file_path,
-        mini_pm_model_input_file_path,
+        micro_vm_model_input_file_path,
+        micro_pm_model_input_file_path,
         PM_MANAGER_INPUT_FOLDER_PATH,
         pm_manager_output_folder_path,
         step,
@@ -82,7 +82,7 @@ def pm_manager(
     end_time_opl = time.time()
 
     # Parse OPL output and reallocate VMs
-    parsed_data = parse_mini_opl_output(opl_output)
+    parsed_data = parse_micro_opl_output(opl_output)
     partial_allocation = parsed_data.get("allocation")
     vm_ids = parsed_data["vm_ids"]
     pm_ids = parsed_data["pm_ids"]
@@ -120,7 +120,7 @@ def launch_pm_manager(
     is_on,
     step,
     time_step,
-    specific_power_function_database,
+    energy_intensity_database,
     nb_points,
     scheduled_vms,
     pms_to_turn_off_after_migration,
@@ -168,8 +168,8 @@ def launch_pm_manager(
             physical_machines_off_subsets = split_dict_sorted(
                 physical_machines_off,
                 pm_manager_max_pms,
-                sort_key_specific_power_capacity,
-                specific_power_function_database,
+                sort_key_energy_intensity_capacity,
+                energy_intensity_database,
             )
         else:
             physical_machines_off_subsets = [physical_machines_off]
@@ -210,7 +210,7 @@ def launch_pm_manager(
                     non_allocated_vms,
                     pm_subset,
                     step,
-                    specific_power_function_database,
+                    energy_intensity_database,
                     nb_points,
                     performance_log_file,
                     is_on,

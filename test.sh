@@ -27,7 +27,7 @@ NEW_VMS_PATTERN_VALUES=(
                         )
 
 MASTER_MODEL_VALUES=(
-                    'main' 
+                    'maxi' 
                     # 'mini'
                     'hybrid'
                     # 'compound'
@@ -48,15 +48,15 @@ WORKLOAD_NAME_VALUES=(
 )
 
 # Filter values
-MAIN_MODEL_MAX_PMS=20
-MINI_MODEL_MAX_PMS=50
+MACRO_MODEL_MAX_PMS=20
+MICRO_MODEL_MAX_PMS=50
 MIGRATION_MODEL_MAX_FRAGMENTED_PMS=20
 FAILED_MIGRATIONS_LIMIT=5
 PM_MANAGER_MAX_PMS=10
 
 # CPLEX parameters
-hard_time_limit_main_factor=2
-hard_time_limit_mini_factor=2
+hard_time_limit_macro_factor=2
+hard_time_limit_micro_factor=2
 
 if [ "$USE_REAL_DATA" = "True" ]; then
   USE_RANDOM_SEED_VALUES=(False)
@@ -172,8 +172,8 @@ for USE_RANDOM_SEED in "${USE_RANDOM_SEED_VALUES[@]}"; do
                   exit 1
                 fi
 
-                hard_time_limit_main=$(echo "scale=2; $TIME_STEP / $hard_time_limit_main_factor" | bc)
-                hard_time_limit_mini=$(echo "scale=2; $TIME_STEP / $hard_time_limit_mini_factor" | bc)
+                hard_time_limit_macro=$(echo "scale=2; $TIME_STEP / $hard_time_limit_macro_factor" | bc)
+                hard_time_limit_micro=$(echo "scale=2; $TIME_STEP / $hard_time_limit_micro_factor" | bc)
 
                 # Modify the copied config file with the new parameter values
                 sed -i "s/^PRINT_TO_CONSOLE = .*/PRINT_TO_CONSOLE = False/" "$TEMP_CONFIG_FILE"
@@ -192,14 +192,14 @@ for USE_RANDOM_SEED in "${USE_RANDOM_SEED_VALUES[@]}"; do
                 sed -i "s/^MASTER_MODEL = .*/MASTER_MODEL = '$MASTER_MODEL'/" "$TEMP_CONFIG_FILE"
                 sed -i "s/^WORKLOAD_NAME = .*/WORKLOAD_NAME = '$WORKLOAD_NAME'/" "$TEMP_CONFIG_FILE"
 
-                sed -i "s/^MAIN_MODEL_MAX_PMS = .*/MAIN_MODEL_MAX_PMS = $MAIN_MODEL_MAX_PMS/" "$TEMP_CONFIG_FILE"
-                sed -i "s/^MINI_MODEL_MAX_PMS = .*/MINI_MODEL_MAX_PMS = $MINI_MODEL_MAX_PMS/" "$TEMP_CONFIG_FILE"
+                sed -i "s/^MACRO_MODEL_MAX_PMS = .*/MACRO_MODEL_MAX_PMS = $MACRO_MODEL_MAX_PMS/" "$TEMP_CONFIG_FILE"
+                sed -i "s/^MICRO_MODEL_MAX_PMS = .*/MICRO_MODEL_MAX_PMS = $MICRO_MODEL_MAX_PMS/" "$TEMP_CONFIG_FILE"
                 sed -i "s/^MIGRATION_MODEL_MAX_FRAGMENTED_PMS = .*/MIGRATION_MODEL_MAX_FRAGMENTED_PMS = $MIGRATION_MODEL_MAX_FRAGMENTED_PMS/" "$TEMP_CONFIG_FILE"
                 sed -i "s/^PM_MANAGER_MAX_PMS = .*/PM_MANAGER_MAX_PMS = $PM_MANAGER_MAX_PMS/" "$TEMP_CONFIG_FILE"
                 sed -i "s/^FAILED_MIGRATIONS_LIMIT = .*/FAILED_MIGRATIONS_LIMIT = $FAILED_MIGRATIONS_LIMIT/" "$TEMP_CONFIG_FILE"
 
-                sed -i "s/^HARD_TIME_LIMIT_MAIN = .*/HARD_TIME_LIMIT_MAIN = $hard_time_limit_main/" "$TEMP_CONFIG_FILE"
-                sed -i "s/^HARD_TIME_LIMIT_MINI = .*/HARD_TIME_LIMIT_MINI = $hard_time_limit_mini/" "$TEMP_CONFIG_FILE"
+                sed -i "s/^HARD_TIME_LIMIT_MACRO = .*/HARD_TIME_LIMIT_MACRO = $hard_time_limit_macro/" "$TEMP_CONFIG_FILE"
+                sed -i "s/^HARD_TIME_LIMIT_MICRO = .*/HARD_TIME_LIMIT_MICRO = $hard_time_limit_micro/" "$TEMP_CONFIG_FILE"
 
                 # Define output log file for capturing run.sh output
                 OUTPUT_LOG_FILE="$TEMP_DIR/output_${USE_RANDOM_SEED}_${SEED_NUMBER}_${WORKLOAD_NAME}_${TIME_STEP}_${NEW_VMS_PER_STEP}_${NEW_VMS_PATTERN}_${NUM_TIME_STEPS}_${MASTER_MODEL}.log"

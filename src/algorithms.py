@@ -363,7 +363,7 @@ def backup_allocation(non_allocated_vms, pms, idle_power):
 
 
 @profile
-def load_balancer(vms, pm_max, pm_min, specific_power_function_database):
+def load_balancer(vms, pm_max, pm_min, energy_intensity_database):
     vms.sort(
         key=lambda vm: (
             w_load_cpu * vm["requested"]["cpu"]
@@ -408,28 +408,28 @@ def load_balancer(vms, pm_max, pm_min, specific_power_function_database):
             pue
             * price["energy"]
             * evaluate_piecewise_linear_function(
-                specific_power_function_database[pm_max["type"]], load_before_max
+                energy_intensity_database[pm_max["type"]], load_before_max
             )
         )
         load_cost_before_min = (
             pue
             * price["energy"]
             * evaluate_piecewise_linear_function(
-                specific_power_function_database[pm_min["type"]], load_before_min
+                energy_intensity_database[pm_min["type"]], load_before_min
             )
         )
         load_cost_after_max = (
             pue
             * price["energy"]
             * evaluate_piecewise_linear_function(
-                specific_power_function_database[pm_max["type"]], load_after_max
+                energy_intensity_database[pm_max["type"]], load_after_max
             )
         )
         load_cost_after_min = (
             pue
             * price["energy"]
             * evaluate_piecewise_linear_function(
-                specific_power_function_database[pm_min["type"]], load_after_min
+                energy_intensity_database[pm_min["type"]], load_after_min
             )
         )
         costs_before = (

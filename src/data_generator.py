@@ -3,7 +3,7 @@ import os
 from config import INITIAL_PMS_FILE
 from utils import (
     convert_pms_to_model_input_format,
-    convert_specific_power_function_to_model_input_format,
+    convert_energy_intensity_to_model_input_format,
     load_pm_database,
 )
 from weights import migration, price
@@ -131,7 +131,7 @@ def generate_new_vms(new_vms_per_step, existing_ids, pattern="constant", step=0)
 
 
 def generate_pms(num_pms, composition, composition_shape):
-    pm_database, _, _, specific_power_function_database = load_pm_database(
+    pm_database, _, _, energy_intensity_database = load_pm_database(
         composition, composition_shape
     )
     pms = {}
@@ -146,9 +146,9 @@ def generate_pms(num_pms, composition, composition_shape):
         pms[pm_id].update(pm_database[type])
 
     formatted_pms = convert_pms_to_model_input_format(pms)
-    formatted_specific_power_function = (
-        convert_specific_power_function_to_model_input_format(
-            pms, specific_power_function_database, nb_points
+    formatted_energy_intensity = (
+        convert_energy_intensity_to_model_input_format(
+            pms, energy_intensity_database, nb_points
         )
     )
 
@@ -156,6 +156,6 @@ def generate_pms(num_pms, composition, composition_shape):
     with open(INITIAL_PMS_FILE, "w") as pm_file:
         pm_file.write(formatted_pms)
         pm_file.write("\n\n")
-        pm_file.write(formatted_specific_power_function)
+        pm_file.write(formatted_energy_intensity)
 
     print(f"Physical machines data saved to {INITIAL_PMS_FILE}")

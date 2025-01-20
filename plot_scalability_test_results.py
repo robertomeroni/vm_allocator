@@ -89,8 +89,6 @@ def plot_data(data):
     plt.show()
 
 def main():
-    # Replace 'results.txt' with the path to your file 
-    # or take from command-line argument
     if len(sys.argv) < 2:
         print(f"Usage: {sys.argv[0]} <report_file>")
         sys.exit(1)

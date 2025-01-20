@@ -149,9 +149,9 @@ def get_fragmented_pms_list(physical_machines, limit=100):
         return list(physical_machines.values())
 
 
-def sort_key_specific_power_capacity(pm, specific_power_function_database):
+def sort_key_energy_intensity_capacity(pm, energy_intensity_database):
     return (
-        specific_power_function_database[pm["type"]]["0.0"]
+        energy_intensity_database[pm["type"]]["0.0"]
         / (
             w_load_cpu * pm["capacity"]["cpu"]
             + (1 - w_load_cpu) * pm["capacity"]["memory"]
@@ -167,20 +167,20 @@ def sort_key_load(pm):
     )
 
 
-def sort_key_specific_power_load(pm, specific_power_function_database):
+def sort_key_energy_intensity_load(pm, energy_intensity_database):
     return (
-        specific_power_function_database[pm["type"]]["0.0"],
+        energy_intensity_database[pm["type"]]["0.0"],
         -max(pm["s"]["load"]["cpu"], pm["s"]["load"]["memory"]),
         -min(pm["s"]["load"]["cpu"], pm["s"]["load"]["memory"]),
     )
 
 
 def split_dict_sorted(
-    d, max_elements_per_subset, sort_key, specific_power_function_database
+    d, max_elements_per_subset, sort_key, energy_intensity_database
 ):
     items_with_keys = sorted(
         (
-            (sort_key(value, specific_power_function_database), key, value)
+            (sort_key(value, energy_intensity_database), key, value)
             for key, value in d.items()
         )
     )

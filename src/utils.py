@@ -8,9 +8,9 @@ import pandas as pd
 from colorama import Style
 
 from config import (
-    MODEL_INPUT_FOLDER_PATH,
+    MACRO_MODEL_INPUT_FOLDER_PATH,
     PM_DATABASE_FILE,
-    SPECIFIC_POWER_FUNCTION_FILE,
+    ENERGY_INTENSITY_FILE,
 )
 from weights import migration, price, pue, w_load_cpu
 
@@ -192,7 +192,7 @@ def load_pm_database(composition, shape="average"):
     pm_database = {}
     power_function_database = {}
     speed_function_database = {}
-    specific_power_function_database = {}
+    energy_intensity_database = {}
 
     # Load the CSV file
     df = pd.read_csv(PM_DATABASE_FILE, encoding="ISO-8859-1")
@@ -335,7 +335,7 @@ def load_pm_database(composition, shape="average"):
                 power_function_database[index] = power_function_database[0]
                 speed_function_database[index] = speed_function_database[0]
 
-        specific_power_function_database[index] = {
+        energy_intensity_database[index] = {
             "0.0": power_function_database[index]["0.0"]
             / speed_function_database[index]["0.0"],
             "0.1": power_function_database[index]["0.1"]
@@ -364,7 +364,7 @@ def load_pm_database(composition, shape="average"):
         pm_database,
         power_function_database,
         speed_function_database,
-        specific_power_function_database,
+        energy_intensity_database,
     )
 
 
@@ -429,7 +429,7 @@ def save_pm_sets(pms, step, output_folder_path):
         json.dump(pms_serializable, file, indent=4)
 
 
-def save_specific_power_function(file_path):
+def save_energy_intensity(file_path):
     if not os.path.exists(file_path):
         print(f"File {file_path} not found.")
         return
@@ -438,32 +438,32 @@ def save_specific_power_function(file_path):
         data = file.read()
 
     try:
-        specific_power_function_section = (
-            data.split("specific_power_function = [")[1].split("];")[0].strip() + "];"
+        energy_intensity_section = (
+            data.split("energy_intensity_function = [")[1].split("];")[0].strip() + "];"
         )
         nb_points_section = data.split("nb_points = ")[1].split(";")[0].strip() + ";"
     except IndexError:
         print()
         raise ValueError(
-            f"Error in loading power function or nb_points: Check the format of {file_path}"
+            f"Error in loading energy function or nb_points: Check the format of {file_path}"
         )
 
-    with open(SPECIFIC_POWER_FUNCTION_FILE, "w") as file:
+    with open(ENERGY_INTENSITY_FILE, "w") as file:
         file.write("nb_points = " + nb_points_section + "\n\n")
-        file.write("specific_power_function = [\n")
-        file.write(specific_power_function_section)
+        file.write("energy_intensity = [\n")
+        file.write(energy_intensity_section)
         file.write("\n")
 
 
-def convert_specific_power_function_to_model_input_format(
-    pms, specific_power_function_database, nb_points
+def convert_energy_intensity_to_model_input_format(
+    pms, energy_intensity_database, nb_points
 ):
-    output_content = f"\n\nnb_points = {nb_points};\n\nspecific_power_function = [\n"
+    output_content = f"\n\nnb_points = {nb_points};\n\nenergy_intensity = [\n"
 
     for pm in pms.values():
-        specific_power_function_dict = specific_power_function_database[pm["type"]]
+        energy_intensity_dict = energy_intensity_database[pm["type"]]
         formatted_values = ", ".join(
-            f"<{x}, {value}>" for x, value in specific_power_function_dict.items()
+            f"<{x}, {value}>" for x, value in energy_intensity_dict.items()
         )
         output_content += f"  [{formatted_values}],\n"
 
@@ -490,7 +490,7 @@ def convert_pms_to_model_input_format(pms):
 
 
 def save_model_input_format(
-    vms, pms, step, model_input_folder_path, specific_power_function_database, nb_points
+    vms, pms, step, model_input_folder_path, energy_intensity_database, nb_points
 ):
     # Ensure the directory exists
     os.makedirs(model_input_folder_path, exist_ok=True)
@@ -505,9 +505,9 @@ def save_model_input_format(
     # Convert data to the required format
     formatted_vms = convert_vms_to_model_input_format(vms)
     formatted_pms = convert_pms_to_model_input_format(pms)
-    formatted_specific_power_function = (
-        convert_specific_power_function_to_model_input_format(
-            pms, specific_power_function_database, nb_points
+    formatted_energy_intensity = (
+        convert_energy_intensity_to_model_input_format(
+            pms, energy_intensity_database, nb_points
         )
     )
 
@@ -518,7 +518,7 @@ def save_model_input_format(
     # Write formatted PMs and power function to file
     with open(pm_model_input_file_path, "w", encoding="utf-8") as pm_file:
         pm_file.write(formatted_pms)
-        pm_file.write(formatted_specific_power_function)
+        pm_file.write(formatted_energy_intensity)
 
     return vm_model_input_file_path, pm_model_input_file_path
 
@@ -618,7 +618,7 @@ def round_down(value):
 
 def clean_up_model_input_files():
     try:
-        os.remove(os.path.join(MODEL_INPUT_FOLDER_PATH, "virtual_machines.dat"))
-        os.remove(os.path.join(MODEL_INPUT_FOLDER_PATH, "physical_machines.dat"))
+        os.remove(os.path.join(MACRO_MODEL_INPUT_FOLDER_PATH, "virtual_machines.dat"))
+        os.remove(os.path.join(MACRO_MODEL_INPUT_FOLDER_PATH, "physical_machines.dat"))
     except FileNotFoundError:
         pass
