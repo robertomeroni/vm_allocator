@@ -61,7 +61,7 @@ tuple Point {
 {PhysicalMachine} physical_machines = ...;
 {VirtualMachine} virtual_machines= ...;
 int nb_points = ...;
-Point energy_intensity[pm in physical_machines][1..nb_points]= ...;
+Point energy_intensity_function[pm in physical_machines][1..nb_points]= ...;
 
 // Weights
 Price price = ...;
@@ -78,10 +78,10 @@ execute {
 
 // Energy consumption of each Physical Machine, depending by the load
 float slopeBeforePoint[pm in physical_machines][p in 1..nb_points]=
-  (p == 1) ? 0 : (energy_intensity[pm][p].y - energy_intensity[pm][p-1].y)/(energy_intensity[pm][p].x-energy_intensity[pm][p-1].x);
-float static_energy[pm in physical_machines] = energy_intensity[pm][1].y; 
+  (p == 1) ? 0 : (energy_intensity_function[pm][p].y - energy_intensity_function[pm][p-1].y)/(energy_intensity_function[pm][p].x-energy_intensity_function[pm][p-1].x);
+float static_energy[pm in physical_machines] = energy_intensity_function[pm][1].y; 
 pwlFunction dynamic_energy[pm in physical_machines] = 
-  piecewise (p in 1..nb_points){slopeBeforePoint[pm][p] -> energy_intensity[pm][p].x; 0} (0, 0);
+  piecewise (p in 1..nb_points){slopeBeforePoint[pm][p] -> energy_intensity_function[pm][p].x; 0} (0, 0);
 
 // Decision Variables
 dvar boolean allocation[virtual_machines][physical_machines];

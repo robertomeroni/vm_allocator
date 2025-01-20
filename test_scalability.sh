@@ -4,26 +4,25 @@
 USE_REAL_DATA=False
 
 PMS_VALUES=(
-            # 1000 
-            # 5000 
-            # 10000 
-            # 15000
-            # 20000
-            25000
-            # 30000
+            1000 
+            5000 
+            10000 
+            15000
+            20000
+            30000
            )
 ALGORITHM_VALUES=(
-                    # 'maxi' 
-                    # 'mini'
+                    'maxi' 
+                    'mini'
                     'hybrid'
-                    # 'compound'
-                    # 'multilayer'
-                    # 'first_fit'
-                    # 'best_fit' 
-                    # 'shi_OM'
-                    # 'shi_AC'
-                    # 'shi_PU'
-                    # 'lago'
+                    'compound'
+                    'multilayer'
+                    'first_fit'
+                    'best_fit' 
+                    'shi_OM'
+                    'shi_AC'
+                    'shi_PU'
+                    'lago'
                     )
 
 TIME_STEP=100  
@@ -124,7 +123,7 @@ for USE_RANDOM_SEED in "${USE_RANDOM_SEED_VALUES[@]}"; do
             CURRENT_TEST=$((CURRENT_TEST + 1))
 
             echo "Running test $CURRENT_TEST of $TOTAL_TESTS..."
-            echo "Master model: $ALGORITHM, PMS: $PMS, VMS: $NEW_VMS_PER_STEP"
+            echo "Algorithm: $ALGORITHM, PMS: $PMS, VMS: $NEW_VMS_PER_STEP"
             echo ""
 
             # Run the simulation 

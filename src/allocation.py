@@ -299,7 +299,6 @@ def schedule_migration(
                     )
 
 
-@profile
 def solve_overload(pm, physical_machines, active_vms, scheduled_vms, time_step):
     vms_to_allocate = []
     pm_dict = {pm["id"]: pm}
@@ -342,7 +341,6 @@ def solve_overload(pm, physical_machines, active_vms, scheduled_vms, time_step):
         )
 
 
-@profile
 def detect_overload(physical_machines, active_vms, scheduled_vms, time_step):
     cpu_load, memory_load = calculate_load(physical_machines, active_vms, time_step)
     for pm in physical_machines.values():

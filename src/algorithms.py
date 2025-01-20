@@ -201,7 +201,6 @@ def get_vms_on_pm_list(vms, pms, is_on):
     return vms_on_pm
 
 
-@profile
 def shi_migration(
     vms, physical_machines, time_step, sort_key, failed_migrations_limit=10
 ):
@@ -281,7 +280,6 @@ def shi_migration(
     return is_on
 
 
-@profile
 def shi_allocation(vms, pms, sort_key):
     magnitude_pm = {}
     for pm_id, pm in pms.items():
@@ -308,7 +306,6 @@ def shi_allocation(vms, pms, sort_key):
     return is_on
 
 
-@profile
 def lago(vms, pms, power_function_database):
     allocation = {vm_id: {"vm_id": vm_id, "pm_id": None} for vm_id in vms}
     sorted_pms = sorted(
@@ -363,7 +360,6 @@ def backup_allocation(non_allocated_vms, pms, idle_power):
                 break  # Move to next VM
 
 
-@profile
 def load_balancer(vms, pm_max, pm_min, energy_intensity_database):
     vms.sort(
         key=lambda vm: (

@@ -61,7 +61,7 @@ tuple Point {
 {PhysicalMachine} physical_machines = ...;
 {VirtualMachine} virtual_machines = ...;
 int nb_points = ...;
-Point energy_intensity[pm in physical_machines][1..nb_points]= ...;
+Point energy_intensity_function[pm in physical_machines][1..nb_points]= ...;
 
 float remaining_run_time[vm in virtual_machines] = vm.run.total_time - vm.run.current_time;
 float remaining_migration_time[vm in virtual_machines] = vm.migration.total_time - vm.migration.current_time;
@@ -81,10 +81,10 @@ int M = card(virtual_machines);
 
 // Energy consumption in 1 second time period of each Physical Machine, depending by the load
 float slopeBeforePoint[pm in physical_machines][p in 1..nb_points]=
-  (p == 1) ? 0 : (energy_intensity[pm][p].y - energy_intensity[pm][p-1].y)/(energy_intensity[pm][p].x-energy_intensity[pm][p-1].x);
-float static_energy_intensity[pm in physical_machines] = energy_intensity[pm][1].y; 
+  (p == 1) ? 0 : (energy_intensity_function[pm][p].y - energy_intensity_function[pm][p-1].y)/(energy_intensity_function[pm][p].x-energy_intensity_function[pm][p-1].x);
+float static_energy_intensity[pm in physical_machines] = energy_intensity_function[pm][1].y; 
 pwlFunction dynamic_energy_intensity[pm in physical_machines] = 
-  piecewise (p in 1..nb_points){slopeBeforePoint[pm][p] -> energy_intensity[pm][p].x; slopeBeforePoint[pm][nb_points]} (0, 0); 
+  piecewise (p in 1..nb_points){slopeBeforePoint[pm][p] -> energy_intensity_function[pm][p].x; slopeBeforePoint[pm][nb_points]} (0, 0); 
 
 // Weights
 Price price = ...;

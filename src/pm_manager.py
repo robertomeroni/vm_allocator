@@ -41,7 +41,6 @@ def allocate_vms(
     return vms_to_deallocate_in_subset
 
 
-@profile
 def pm_manager(
     non_allocated_vms,
     physical_machines_off,
@@ -113,7 +112,6 @@ def pm_manager(
     return vms_to_deallocate_in_subset
 
 
-@profile
 def launch_pm_manager(
     active_vms,
     physical_machines,

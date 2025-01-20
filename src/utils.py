@@ -450,7 +450,7 @@ def save_energy_intensity(file_path):
 
     with open(ENERGY_INTENSITY_FILE, "w") as file:
         file.write("nb_points = " + nb_points_section + "\n\n")
-        file.write("energy_intensity = [\n")
+        file.write("energy_intensity_function = [\n")
         file.write(energy_intensity_section)
         file.write("\n")
 
@@ -458,7 +458,7 @@ def save_energy_intensity(file_path):
 def convert_energy_intensity_to_model_input_format(
     pms, energy_intensity_database, nb_points
 ):
-    output_content = f"\n\nnb_points = {nb_points};\n\nenergy_intensity = [\n"
+    output_content = f"\n\nnb_points = {nb_points};\n\nenergy_intensity_function = [\n"
 
     for pm in pms.values():
         energy_intensity_dict = energy_intensity_database[pm["type"]]

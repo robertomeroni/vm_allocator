@@ -96,7 +96,7 @@ except NameError:
         return func
 
 
-@profile
+
 def run_macro_model(
     vms,
     highest_fragmentation_pms,
@@ -257,9 +257,6 @@ def run_macro_model(
                     performance_log_file,
                 )
 
-    else:
-        print(color_text(f"\nNo available PMs for time step {step}...", Fore.YELLOW))
-
 
 def launch_macro_model(
     active_vms,
@@ -318,7 +315,7 @@ def launch_macro_model(
                 break
 
 
-@profile
+
 def run_micro_model(
     active_vms,
     non_allocated_vms,
@@ -413,7 +410,7 @@ def run_micro_model(
         )
 
 
-@profile
+
 def launch_micro_model(
     active_vms,
     non_allocated_vms,
@@ -502,15 +499,9 @@ def launch_micro_model(
 
                     else:
                         break
-            else:
-                print(
-                    color_text(
-                        f"\nNo available PMs for time step {step}...", Fore.YELLOW
-                    )
-                )
 
 
-@profile
+
 def run_migration_model(
     non_allocated_vms,
     physical_machines_on,
@@ -562,7 +553,7 @@ def run_migration_model(
         return partial_allocation, vm_ids, pm_ids, end_time_opl - start_time_opl
 
 
-@profile
+
 def launch_migration_model(
     active_vms,
     physical_machines_on,
@@ -706,7 +697,7 @@ def launch_migration_model(
                         break
 
 
-@profile
+
 def run_load_balancer(
     active_vms,
     physical_machines_on,
@@ -1051,7 +1042,7 @@ def execute_time_step(
     return completed_migrations_in_step
 
 
-@profile
+
 def simulate_time_steps(
     initial_vms,
     initial_pms,

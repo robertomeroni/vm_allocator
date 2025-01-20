@@ -16,7 +16,6 @@ except NameError:
         return func
 
 
-@profile
 def save_micro_model_input_format(
     vms, pms, step, model_input_folder_path, energy_intensity_database, nb_points
 ):

@@ -63,7 +63,6 @@ def log_vm_execution_time(vm, vm_execution_time_file, time_step):
         )
 
 
-@profile
 def log_allocation(
     step,
     active_vms,
@@ -556,7 +555,7 @@ def log_final_net_profit(
     with open(log_file_path, "a") as log_file:
 
         if algorithm:
-            model_message = f"Master Model: {algorithm}"
+            model_message = f"Algorithm: {algorithm}"
             log_file.write(model_message + "\n")
 
         if use_real_data:

@@ -46,7 +46,6 @@ def filter_migrating_pms(active_vms, physical_machines):
             del physical_machines[pm_id]
 
 
-@profile
 def filter_full_and_migrating_pms(active_vms, physical_machines):
     # Collect PM IDs with ongoing migrations
     pms_with_ongoing_migrations = set()
