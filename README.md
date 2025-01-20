@@ -2,6 +2,10 @@
 
 Simulate the allocation and execution of Virtual Machines on Physical Machines to test the efficacy of algorithms. Developed proprietary algorithms combine mathematical programming models for optimal allocation in an efficient and scalable manner.
 
+## Prerequisites
+
+- **IBM ILOG CPLEX Optimization Studio**: This project requires IBM ILOG CPLEX Optimization Studio for solving VM allocation with proprietary algorithms.
+
 ## Setup Instructions
 
 1. **Clone the Repository**
