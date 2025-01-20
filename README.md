@@ -47,11 +47,18 @@ Simulate the allocation and execution of Virtual Machines on Physical Machines t
 - **Run a Simulation**: To run a simulation with the settings in `config.py`, execute the following command:
 
   ```bash
-  bash run.sh
+  ./run.sh
   ```
 
 - **Run Tests with Multiple Algorithms**: To run a test with multiple algorithms, use:
 
   ```bash
-  bash test.sh
+  ./test.sh
   ```
+
+- **Test Scalability**: To test the scalability of the algorithms, execute:
+
+  ```bash
+  ./test_scalability.sh
+  ```
+
