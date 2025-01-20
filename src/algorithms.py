@@ -2,7 +2,7 @@ from copy import deepcopy
 from math import sqrt
 
 from utils import evaluate_piecewise_linear_function
-from weights import price, pue, w_load_cpu, EPSILON
+from weights import price, pue, w_load_cpu
 
 try:
     profile  # type: ignore
@@ -33,15 +33,20 @@ def vm_fits_on_pm(vm, pm):
             return True
     return False
 
+
 def vm_exceeds_pm_load(vm, pm):
     return (
         pm["capacity"]["cpu"]
         - (pm["s"]["load"]["cpu"] * pm["capacity"]["cpu"] + vm["requested"]["cpu"])
         < 0
         or pm["capacity"]["memory"]
-        - (pm["s"]["load"]["memory"] * pm["capacity"]["memory"] + vm["requested"]["memory"])
+        - (
+            pm["s"]["load"]["memory"] * pm["capacity"]["memory"]
+            + vm["requested"]["memory"]
+        )
         < 0
     )
+
 
 def algorithms_reallocate_vms(allocation, active_vms):
     for a in allocation:
@@ -195,6 +200,7 @@ def get_vms_on_pm_list(vms, pms, is_on):
             vms_on_pm[vm["migration"]["to_pm"]].append(vm)
     return vms_on_pm
 
+
 @profile
 def shi_migration(
     vms, physical_machines, time_step, sort_key, failed_migrations_limit=10
@@ -274,6 +280,7 @@ def shi_migration(
     manage_pms_load(vms, pms, is_on)
     return is_on
 
+
 @profile
 def shi_allocation(vms, pms, sort_key):
     magnitude_pm = {}
@@ -301,42 +308,32 @@ def shi_allocation(vms, pms, sort_key):
     return is_on
 
 @profile
-def guazzone_bfd(vms, pms, idle_power):
+def lago(vms, pms, power_function_database):
     allocation = {vm_id: {"vm_id": vm_id, "pm_id": None} for vm_id in vms}
-    sorted_vms = sorted(
-        vms.values(),
-        key=lambda vm: (vm["requested"]["cpu"], vm["requested"]["memory"]),
-        reverse=True,
-    )
-
     sorted_pms = sorted(
         pms.values(),
         key=lambda pm: (
-            not pm["s"]["state"] == 1,  # Powered-on PMs precede powered-off ones
-            pm["s"]["time_to_turn_on"],
-            -(
-                pm["capacity"]["cpu"] - pm["s"]["load"]["cpu"] * pm["capacity"]["cpu"]
-            ),  # Decreasing free CPU capacity
-            idle_power[pm["id"]],  # Increasing idle power consumption
+            pm["capacity"]["cpu"] / power_function_database[pm["type"]]["1.0"],
+            - power_function_database[pm["type"]]["1.0"],
+            pm["s"]["load"]["cpu"],
+            pm["capacity"]["cpu"],
         ),
+        reverse=True,
     )
 
-    for vm in sorted_vms:
-        vm_id = vm["id"]
+    for vm_id, vm in vms.items():
         if vm["allocation"]["pm"] != -1 or vm["migration"]["to_pm"] != -1:
             continue  # VM is already allocated or migrating
         for pm in sorted_pms:
             if vm["run"]["pm"] == pm["id"]:
                 break  # VM is already running on the best PM
-            if vm["run"]["pm"] != -1 and pm["s"]["load"]["cpu"] == 0 and pm["s"]["load"]["memory"] == 0:
-                continue
             if vm_fits_on_pm(vm, pm):
                 pm["s"]["load"]["cpu"] += vm["requested"]["cpu"] / pm["capacity"]["cpu"]
                 pm["s"]["load"]["memory"] += (
                     vm["requested"]["memory"] / pm["capacity"]["memory"]
                 )
                 allocation[vm_id]["pm_id"] = pm["id"]
-                break
+                break  # Move to next VM
 
     algorithms_reallocate_vms(allocation.values(), vms)
     is_on = manage_pms_allocation(pms, allocation.values())
@@ -364,14 +361,25 @@ def backup_allocation(non_allocated_vms, pms, idle_power):
                 vm["allocation"]["pm"] = pm["id"]
                 break  # Move to next VM
 
+
 @profile
 def load_balancer(vms, pm_max, pm_min, specific_power_function_database):
-    vms.sort(key=lambda vm: (w_load_cpu * vm["requested"]["cpu"] + (1 - w_load_cpu) * vm["requested"]["memory"]), reverse=True)
+    vms.sort(
+        key=lambda vm: (
+            w_load_cpu * vm["requested"]["cpu"]
+            + (1 - w_load_cpu) * vm["requested"]["memory"]
+        ),
+        reverse=True,
+    )
 
     for vm in vms:
         remaining_run_time = vm["run"]["total_time"] - vm["run"]["current_time"]
         revenue_per_second = vm["revenue"] / vm["run"]["total_time"]
-        if vm["run"]["pm"] == -1 or vm["migration"]["total_time"] > remaining_run_time or vm_exceeds_pm_load(vm, pm_min):
+        if (
+            vm["run"]["pm"] == -1
+            or vm["migration"]["total_time"] > remaining_run_time
+            or vm_exceeds_pm_load(vm, pm_min)
+        ):
             continue
         load_before_max = (
             w_load_cpu * pm_max["s"]["load"]["cpu"]
@@ -427,11 +435,9 @@ def load_balancer(vms, pm_max, pm_min, specific_power_function_database):
         costs_before = (
             load_cost_before_max + load_cost_before_min
         ) * remaining_run_time
-        costs_after = (
-            (load_cost_after_max + load_cost_after_min)
-            * (remaining_run_time + vm["migration"]["down_time"])
-            + migration_energy_cost
-        )
+        costs_after = (load_cost_after_max + load_cost_after_min) * (
+            remaining_run_time + vm["migration"]["down_time"]
+        ) + migration_energy_cost
         gain_before = revenue_per_second * remaining_run_time - costs_before
         gain_after = revenue_per_second * remaining_run_time - costs_after
         if gain_after > gain_before:

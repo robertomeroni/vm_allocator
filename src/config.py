@@ -3,15 +3,16 @@ import os
 # General
 USE_RANDOM_SEED = True
 SEED_NUMBER = 1
-PRINT_TO_CONSOLE = True
+PRINT_TO_CONSOLE = False
 SAVE_VM_AND_PM_SETS = False
-SAVE_LOGS = True
+SAVE_LOGS = False
 
 # Workload
 USE_REAL_DATA = True
-HOMOGENOUS = False
+COMPOSITION = "heterogeneous"
+COMPOSITION_SHAPE = "average"
 
-# WORKLOAD_NAME = "Intel-Netbatch-2012-A"
+WORKLOAD_NAME = "Intel-Netbatch-2012-A"
 # WORKLOAD_NAME = "Intel-Netbatch-2012-B"
 # WORKLOAD_NAME = "Intel-Netbatch-2012-C"
 # WORKLOAD_NAME = "Intel-Netbatch-2012-D"
@@ -22,34 +23,34 @@ HOMOGENOUS = False
 # WORKLOAD_NAME = "TU-Delft-2007"
 # WORKLOAD_NAME = "UniLu-Gaia-2014"
 # WORKLOAD_NAME = "Azure-2020"
-WORKLOAD_NAME = "Chameleon-Legacy-2020"
+# WORKLOAD_NAME = "Chameleon-Legacy-2020"
 # WORKLOAD_NAME = "Chameleon-New-2020"
 
 # Simulation parameters
 STARTING_STEP = 1
-TIME_STEP = 50  # Time step in seconds
-NUM_TIME_STEPS = 50000000  # Number of time steps to simulate
+TIME_STEP = 10  # Time step in seconds
+NUM_TIME_STEPS = 3000  # Number of time steps to simulate
 
 NEW_VMS_PER_STEP = 30  # Expected number of new VMs to generate at each time step
 NEW_VMS_PATTERN = "random_spikes"
 
 # Models to use
-MASTER_MODEL = "main"
+# MASTER_MODEL = "main"
 # MASTER_MODEL = "mini"
 # MASTER_MODEL = "hybrid"
 # MASTER_MODEL = "compound"
 # MASTER_MODEL = "multilayer"
 # MASTER_MODEL = "first_fit"
-# MASTER_MODEL = "best_fit"
-# MASTER_MODEL = "guazzone"
+MASTER_MODEL = "best_fit"
 # MASTER_MODEL = "shi_OM"
 # MASTER_MODEL = "shi_AC"
 # MASTER_MODEL = "shi_PU"
+# MASTER_MODEL = "lago"
 
 MAIN_MODEL_MAX_SUBSETS = 5
 MAIN_MODEL_MAX_PMS = 20
 MINI_MODEL_MAX_PMS = 50
-MINI_MODEL_MAX_VMS = 200
+MINI_MODEL_MAX_VMS = 100
 FAILED_MIGRATIONS_LIMIT = 5
 MIGRATION_MODEL_MAX_FRAGMENTED_PMS = 4 * FAILED_MIGRATIONS_LIMIT
 PM_MANAGER_MAX_PMS = 10
@@ -88,9 +89,24 @@ OUTPUT_FOLDER_PATH = os.path.join(BASE_PATH, "simulation/simulation_output")
 LOGS_FOLDER_PATH = os.path.join(BASE_PATH, "logs")
 
 FLOW_CONTROL_PATH = os.path.join(BASE_PATH, "model/flow_control.mod")
-INITIAL_PMS_FILE = os.path.join(
-    SIMULATION_INPUT_FOLDER_PATH, f"physical_machines_{WORKLOAD_NAME}.dat"
-)
+
+if USE_REAL_DATA:
+    if COMPOSITION == "almost_heterogeneous":
+        INITIAL_PMS_FILE = os.path.join(
+            SIMULATION_INPUT_FOLDER_PATH,
+            f"{COMPOSITION}/{COMPOSITION_SHAPE}/physical_machines_{WORKLOAD_NAME}.dat",
+        )
+    else:
+        INITIAL_PMS_FILE = os.path.join(
+            SIMULATION_INPUT_FOLDER_PATH,
+            f"{COMPOSITION}/physical_machines_{WORKLOAD_NAME}.dat",
+        )
+else:
+    INITIAL_PMS_FILE = os.path.join(
+        SIMULATION_INPUT_FOLDER_PATH,
+        "physical_machines_synthetic.dat",
+    )
+
 INITIAL_VMS_FILE = os.path.join(SIMULATION_INPUT_FOLDER_PATH, "virtual_machines.dat")
 VMS_TRACE_FILE = os.path.join(
     SIMULATION_INPUT_FOLDER_PATH, f"workload_files/{WORKLOAD_NAME}.json"

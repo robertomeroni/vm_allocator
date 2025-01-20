@@ -1,8 +1,7 @@
 import os
 import time
 
-from allocation import (get_non_allocated_workload, get_pms_on_schedule,
-                        run_opl_model)
+from allocation import get_non_allocated_workload, get_pms_on_schedule, run_opl_model
 from config import PM_MANAGER_INPUT_FOLDER_PATH, PM_MANAGER_OUTPUT_FOLDER_PATH
 from filter import sort_key_specific_power_capacity, split_dict_sorted
 from log import log_performance
@@ -180,12 +179,16 @@ def launch_pm_manager(
         for index, pm_subset in enumerate(physical_machines_off_subsets):
             # If no new VMs were allocated, include immediately bigger PMs
             if num_non_allocated_vms == len(non_allocated_vms):
-                min_vm_cpu = min(vm["requested"]["cpu"] for vm in non_allocated_vms.values())
-                min_vm_memory = min(vm["requested"]["memory"] for vm in non_allocated_vms.values())
+                min_vm_cpu = min(
+                    vm["requested"]["cpu"] for vm in non_allocated_vms.values()
+                )
+                min_vm_memory = min(
+                    vm["requested"]["memory"] for vm in non_allocated_vms.values()
+                )
                 # If in the next subset there is no PM that can host the smallest VM, skip this subset
                 if not any(
-                    pm["capacity"]["cpu"] >= min_vm_cpu and
-                    pm["capacity"]["memory"] >= min_vm_memory
+                    pm["capacity"]["cpu"] >= min_vm_cpu
+                    and pm["capacity"]["memory"] >= min_vm_memory
                     for pm in pm_subset.values()
                 ):
                     continue  # Skip this subset if no PM can host the smallest VM

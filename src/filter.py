@@ -1,7 +1,6 @@
 import heapq
-from math import sqrt
 from itertools import islice
-from weights import EPSILON
+from weights import EPSILON, w_load_cpu
 
 
 try:
@@ -32,6 +31,7 @@ def is_pm_full(pm):
         or pm["s"]["load"]["memory"] >= 1 - EPSILON
     )
 
+
 def filter_migrating_pms(active_vms, physical_machines):
     # Collect PM IDs with ongoing migrations
     pms_with_ongoing_migrations = set()
@@ -40,10 +40,11 @@ def filter_migrating_pms(active_vms, physical_machines):
             pms_with_ongoing_migrations.add(vm["migration"]["to_pm"])
         if vm["migration"]["from_pm"] != -1:
             pms_with_ongoing_migrations.add(vm["migration"]["from_pm"])
-    
+
     for pm_id in pms_with_ongoing_migrations:
         if pm_id in physical_machines:
             del physical_machines[pm_id]
+
 
 @profile
 def filter_full_and_migrating_pms(active_vms, physical_machines):
@@ -74,7 +75,7 @@ def filter_fragmented_pms(physical_machines, limit=100):
         highest_fragmentation_pms = heapq.nlargest(
             limit, physical_machines.values(), key=sort_key_load
         )
-        
+
         return {pm["id"]: pm for pm in highest_fragmentation_pms}
     else:
         return physical_machines
@@ -137,7 +138,7 @@ def filter_vms_on_pms_and_non_allocated(vms, physical_machines, scheduled_vms):
         for scheduled_vm in vm_list:
             if scheduled_vm["id"] in filtered_vms:
                 del filtered_vms[scheduled_vm["id"]]
-                
+
     return filtered_vms
 
 
@@ -150,8 +151,11 @@ def get_fragmented_pms_list(physical_machines, limit=100):
 
 def sort_key_specific_power_capacity(pm, specific_power_function_database):
     return (
-        specific_power_function_database[pm["type"]]["0.0"], 
-        sqrt(pm["capacity"]["cpu"] ** 2 + pm["capacity"]["memory"] ** 2),
+        specific_power_function_database[pm["type"]]["0.0"]
+        / (
+            w_load_cpu * pm["capacity"]["cpu"]
+            + (1 - w_load_cpu) * pm["capacity"]["memory"]
+        ),
         pm["s"]["time_to_turn_on"],
     )
 

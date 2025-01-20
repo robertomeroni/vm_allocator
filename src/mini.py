@@ -1,9 +1,12 @@
 import os
 import re
 
-from utils import (convert_pms_to_model_input_format,
-                   convert_specific_power_function_to_model_input_format,
-                   convert_vms_to_model_input_format, parse_matrix)
+from utils import (
+    convert_pms_to_model_input_format,
+    convert_specific_power_function_to_model_input_format,
+    convert_vms_to_model_input_format,
+    parse_matrix,
+)
 
 try:
     profile  # type: ignore

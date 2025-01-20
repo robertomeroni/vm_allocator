@@ -1,9 +1,11 @@
 import numpy as np
-
+import os
 from config import INITIAL_PMS_FILE
-from utils import (convert_pms_to_model_input_format,
-                   convert_specific_power_function_to_model_input_format,
-                   load_pm_database)
+from utils import (
+    convert_pms_to_model_input_format,
+    convert_specific_power_function_to_model_input_format,
+    load_pm_database,
+)
 from weights import migration, price
 
 
@@ -70,8 +72,12 @@ def generate_new_vms(new_vms_per_step, existing_ids, pattern="constant", step=0)
             requested_memory = min(max(requested_memory, 4), 32)
         else:
             # Default resource requests
-            requested_cpu = np.random.choice([1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 4, 4, 8])
-            requested_memory = np.random.choice([1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 4, 4, 8, 8, 16])
+            requested_cpu = np.random.choice(
+                [1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 4, 4, 8]
+            )
+            requested_memory = np.random.choice(
+                [1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 4, 4, 8, 8, 16]
+            )
 
         # Random total run time
         run_total_time = np.random.uniform(30.0, 6000.0)
@@ -124,13 +130,15 @@ def generate_new_vms(new_vms_per_step, existing_ids, pattern="constant", step=0)
     return new_vms  # Return the list of new VMs
 
 
-def generate_pms(num_pms, homogenous=False):
-    pm_database, _, _, specific_power_function_database = load_pm_database()
+def generate_pms(num_pms, composition, composition_shape):
+    pm_database, _, _, specific_power_function_database = load_pm_database(
+        composition, composition_shape
+    )
     pms = {}
     nb_points = 11
 
     for pm_id in range(num_pms):
-        if homogenous:
+        if composition == "homogeneous":
             type = 0
         else:
             type = np.random.randint(0, len(pm_database))
@@ -144,6 +152,7 @@ def generate_pms(num_pms, homogenous=False):
         )
     )
 
+    os.makedirs(os.path.dirname(INITIAL_PMS_FILE), exist_ok=True)
     with open(INITIAL_PMS_FILE, "w") as pm_file:
         pm_file.write(formatted_pms)
         pm_file.write("\n\n")

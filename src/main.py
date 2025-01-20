@@ -2,20 +2,23 @@ import argparse
 import csv
 import importlib.util
 import os
+import shutil
 import sys
 import time
-
 import numpy as np
 
-from calculate import (calculate_performance_metrics, count_non_valid_entries)
+from calculate import calculate_performance_metrics, count_non_valid_entries
 from data_generator import generate_pms
-from log import (create_log_folder, log_final_net_profit,
-                 log_initial_physical_machines)
+from log import create_log_folder, log_final_net_profit, log_initial_physical_machines
 from simulation import simulate_time_steps
-from utils import (clean_up_model_input_files,
-                   load_configuration, load_physical_machines,
-                   load_pm_database, load_virtual_machines,
-                   save_specific_power_function)
+from utils import (
+    clean_up_model_input_files,
+    load_configuration,
+    load_physical_machines,
+    load_pm_database,
+    load_virtual_machines,
+    save_specific_power_function,
+)
 
 # Parse command-line arguments
 parser = argparse.ArgumentParser()
@@ -70,7 +73,8 @@ USE_RANDOM_SEED = getattr(config, "USE_RANDOM_SEED", None)
 SEED_NUMBER = getattr(config, "SEED_NUMBER", None)
 STARTING_STEP = getattr(config, "STARTING_STEP", None)
 USE_REAL_DATA = getattr(config, "USE_REAL_DATA", None)
-HOMOGENOUS = getattr(config, "HOMOGENOUS", None)
+COMPOSITION = getattr(config, "COMPOSITION", None)
+COMPOSITION_SHAPE = getattr(config, "COMPOSITION_SHAPE", None)
 WORKLOAD_NAME = getattr(config, "WORKLOAD_NAME", None)
 PRINT_TO_CONSOLE = getattr(config, "PRINT_TO_CONSOLE", None)
 SAVE_LOGS = getattr(config, "SAVE_LOGS", None)
@@ -109,7 +113,7 @@ else:
     VMS_TRACE_FILE = None
 
 if args.generate_pms:
-    generate_pms(args.generate_pms, HOMOGENOUS)
+    generate_pms(args.generate_pms, COMPOSITION, COMPOSITION_SHAPE)
 
 if USE_RANDOM_SEED:
     np.random.seed(SEED_NUMBER)
@@ -120,6 +124,14 @@ os.makedirs(MODEL_INPUT_FOLDER_PATH, exist_ok=True)
 os.makedirs(MODEL_OUTPUT_FOLDER_PATH, exist_ok=True)
 os.makedirs(MINI_MODEL_INPUT_FOLDER_PATH, exist_ok=True)
 os.makedirs(MINI_MODEL_OUTPUT_FOLDER_PATH, exist_ok=True)
+os.makedirs(SIMULATION_INPUT_FOLDER_PATH, exist_ok=True)
+
+if os.path.expanduser(INITIAL_PMS_FILE) != os.path.join(SIMULATION_INPUT_FOLDER_PATH, os.path.basename(INITIAL_PMS_FILE)):
+    shutil.copy(
+        os.path.expanduser(INITIAL_PMS_FILE),
+        os.path.join(SIMULATION_INPUT_FOLDER_PATH, os.path.basename(INITIAL_PMS_FILE)),
+    )
+
 
 if __name__ == "__main__":
     total_start_time = time.time()  # Record the start time
@@ -139,7 +151,7 @@ if __name__ == "__main__":
         power_function_database,
         speed_function_database,
         specific_power_function_database,
-    ) = load_pm_database()
+    ) = load_pm_database(COMPOSITION, COMPOSITION_SHAPE)
     nb_points = len(next(iter(specific_power_function_database.values())))
 
     (
@@ -189,7 +201,9 @@ if __name__ == "__main__":
     )
 
     non_valid_entries, total_entries = count_non_valid_entries(performance_log_file)
-    avg_wait_time, runtime_efficiency, overall_time_efficiency = calculate_performance_metrics(vm_execution_time_file)
+    avg_wait_time, runtime_efficiency, overall_time_efficiency = (
+        calculate_performance_metrics(vm_execution_time_file)
+    )
 
     log_final_net_profit(
         total_revenue,

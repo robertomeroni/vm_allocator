@@ -16,7 +16,7 @@ migration = {
     "time": {  # in seconds
         "memory_dirty_rate": 0.1,  # GB of memory that gets dirty per second during live migration
         "network_bandwidth": 1.0,  # GB/s
-        "resume_vm_on_target": 20.0 / 10**3,  # in seconds
+        "resume_vm_on_target": 200.0 / 10**3,  # in seconds
     },
     "energy": {  # in J
         "coefficient": 512,

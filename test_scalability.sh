@@ -1,25 +1,21 @@
 #!/bin/bash
 
 # Define the ranges for parameters to be modified
-USE_REAL_DATA=True
-HOMOGENOUS=False
+USE_REAL_DATA=False
 
-USE_RANDOM_SEED_VALUES=(True)
-SEED_NUMBER_VALUES=($(seq 1 1))  # This creates a range from 1 to 20
-NEW_VMS_PER_STEP_VALUES=(20)
-NEW_VMS_PATTERN_VALUES=(
-                        'constant'
-                        'poisson'
-                        'burst'
-                        'heavy_tail'
-                        'sinusoidal'
-                        'random_spikes'
-                        )
-
+PMS_VALUES=(
+            # 1000 
+            # 5000 
+            # 10000 
+            # 15000
+            # 20000
+            25000
+            # 30000
+           )
 MASTER_MODEL_VALUES=(
                     # 'main' 
                     # 'mini'
-                    # 'hybrid'
+                    'hybrid'
                     # 'compound'
                     # 'multilayer'
                     # 'first_fit'
@@ -27,23 +23,14 @@ MASTER_MODEL_VALUES=(
                     # 'shi_OM'
                     # 'shi_AC'
                     # 'shi_PU'
-                    'guazzone'
+                    # 'lago'
                     )
-WORKLOAD_NAME_VALUES=(
-  # 'Chameleon-New-2020'
-  # 'Chameleon-Legacy-2020'
-  # 'LLNL-Thunder-2007'
-  # 'METACENTRUM-2009'
-  # 'PIK-IPLEX-2009'
-  # 'RICC-2010'
-  # 'TU-Delft-2007'
-  # 'UniLu-Gaia-2014'
-  # 'Intel-Netbatch-2012-A'
-  # 'Intel-Netbatch-2012-B'
-  # 'Intel-Netbatch-2012-C'
-  # 'Intel-Netbatch-2012-D'
-  # 'Azure-2020'
-)
+
+TIME_STEP=100  
+NUM_TIME_STEPS=100 
+USE_RANDOM_SEED_VALUES=(True)
+SEED_NUMBER_VALUES=($(seq 1 1))  # This creates a range from 1 to 20
+NEW_VMS_PER_STEP_VALUES=(500)
 
 # Filter values
 MAIN_MODEL_MAX_PMS=20
@@ -52,84 +39,10 @@ MIGRATION_MODEL_MAX_FRAGMENTED_PMS=20
 FAILED_MIGRATIONS_LIMIT=5
 PM_MANAGER_MAX_PMS=10
 
-# CPLEX parameters
-hard_time_limit_main_factor=2
-hard_time_limit_mini_factor=2
+WORKLOAD_NAME_VALUES=('synthetic')
 
-if [ "$USE_REAL_DATA" = "True" ]; then
-  USE_RANDOM_SEED_VALUES=(False)
-  SEED_NUMBER_VALUES=(1)
-  NEW_VMS_PER_STEP_VALUES=(1)
-  NEW_VMS_PATTERN_VALUES=('constant')
-else
-  WORKLOAD_NAME_VALUES=('synthetic')
-fi
-
-TOTAL_TESTS=$(( ${#USE_RANDOM_SEED_VALUES[@]} * ${#SEED_NUMBER_VALUES[@]} * ${#WORKLOAD_NAME_VALUES[@]} * ${#MASTER_MODEL_VALUES[@]} * ${#NEW_VMS_PER_STEP_VALUES[@]} * ${#NEW_VMS_PATTERN_VALUES[@]} ))
+TOTAL_TESTS=$(( ${#USE_RANDOM_SEED_VALUES[@]} * ${#SEED_NUMBER_VALUES[@]} * ${#PMS_VALUES[@]} * ${#MASTER_MODEL_VALUES[@]} * ${#NEW_VMS_PER_STEP_VALUES[@]} ))
 CURRENT_TEST=0
-
-# Function to set NUM_TIME_STEPS and TIME_STEP based on WORKLOAD_NAME
-function set_parameters() {
-  case "$WORKLOAD_NAME" in
-    "Azure-2020")
-      TIME_STEP=5
-      NUM_TIME_STEPS=5000
-      ;;
-    "Chameleon-Legacy-2020")
-      TIME_STEP=50
-      NUM_TIME_STEPS=700000
-      ;;
-    "Chameleon-New-2020")
-      TIME_STEP=50
-      NUM_TIME_STEPS=50000000
-      ;;
-    "Intel-Netbatch-2012-A")
-      TIME_STEP=10
-      NUM_TIME_STEPS=5000
-      ;;
-    "Intel-Netbatch-2012-B")
-      TIME_STEP=10
-      NUM_TIME_STEPS=5000
-      ;;
-    "Intel-Netbatch-2012-C")
-      TIME_STEP=10
-      NUM_TIME_STEPS=5000
-      ;;
-    "Intel-Netbatch-2012-D")
-      TIME_STEP=10
-      NUM_TIME_STEPS=5000
-      ;;
-    "LLNL-Thunder-2007")
-      TIME_STEP=50
-      NUM_TIME_STEPS=20000
-      ;;
-    "METACENTRUM-2009")
-      TIME_STEP=50
-      NUM_TIME_STEPS=100000
-      ;;
-    "PIK-IPLEX-2009")
-      TIME_STEP=50
-      NUM_TIME_STEPS=100000
-      ;;
-    "RICC-2010")
-      TIME_STEP=50
-      NUM_TIME_STEPS=5000
-      ;;
-    "TU-Delft-2007")
-      TIME_STEP=50
-      NUM_TIME_STEPS=150000
-      ;;
-    "UniLu-Gaia-2014")
-      TIME_STEP=50
-      NUM_TIME_STEPS=100000
-      ;;
-      
-    *)
-      TIME_STEP=20  # Default value
-      NUM_TIME_STEPS=1500  # Default value
-      ;;
-  esac
-}
 
 # Create a temporary directory for modified config files
 TEMP_DIR=$(mktemp -d)
@@ -150,7 +63,12 @@ ORIGINAL_WEIGHTS_FILE="src/weights.py"
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 
 # File to store final results
-RESULTS_FILE="log_tests/final_results_${TIMESTAMP}.txt"
+RESULTS_DIR="log_scalability"
+RESULTS_FILE="${RESULTS_DIR}/final_results_${TIMESTAMP}.txt"
+# Check if the log_scalability directory exists, if not, create it
+if [ ! -d "$RESULTS_DIR" ]; then
+  mkdir -p "$RESULTS_DIR"
+fi
 
 clear; 
 
@@ -158,12 +76,10 @@ clear;
 for USE_RANDOM_SEED in "${USE_RANDOM_SEED_VALUES[@]}"; do
   for SEED_NUMBER in "${SEED_NUMBER_VALUES[@]}"; do
     for WORKLOAD_NAME in "${WORKLOAD_NAME_VALUES[@]}"; do
-      set_parameters
       for MASTER_MODEL in "${MASTER_MODEL_VALUES[@]}"; do
-        for NEW_VMS_PATTERN in "${NEW_VMS_PATTERN_VALUES[@]}"; do
+        for PMS in "${PMS_VALUES[@]}"; do
           for NEW_VMS_PER_STEP in "${NEW_VMS_PER_STEP_VALUES[@]}"; do
-            INITIAL_PMS_FILE="simulation/simulation_input/physical_machines_${WORKLOAD_NAME}.dat"
-
+            NEW_VMS_PER_STEP=$((PMS / 10))
             # Define the temporary config file path
             TEMP_CONFIG_FILE="$TEMP_DIR/config_${USE_RANDOM_SEED}_${SEED_NUMBER}_${WORKLOAD_NAME}_${TIME_STEP}_${NEW_VMS_PER_STEP}_${NUM_TIME_STEPS}_${MASTER_MODEL}.py"
 
@@ -176,20 +92,19 @@ for USE_RANDOM_SEED in "${USE_RANDOM_SEED_VALUES[@]}"; do
               exit 1
             fi
 
-            hard_time_limit_main=$(echo "scale=2; $TIME_STEP / $hard_time_limit_main_factor" | bc)
-            hard_time_limit_mini=$(echo "scale=2; $TIME_STEP / $hard_time_limit_mini_factor" | bc)
-
             # Modify the copied config file with the new parameter values
             sed -i "s/^PRINT_TO_CONSOLE = .*/PRINT_TO_CONSOLE = False/" "$TEMP_CONFIG_FILE"
             sed -i "s/^SAVE_LOGS = .*/SAVE_LOGS = False/" "$TEMP_CONFIG_FILE"
+            sed -i "s/^SAVE_VM_AND_PM_SETS = .*/SAVE_VM_AND_PM_SETS = False/" "$TEMP_CONFIG_FILE"
 
             sed -i "s/^USE_REAL_DATA = .*/USE_REAL_DATA = $USE_REAL_DATA/" "$TEMP_CONFIG_FILE"
-            sed -i "s/^HOMOGENEOUS = .*/HOMOGENEOUS = $HOMOGENEOUS/" "$TEMP_CONFIG_FILE"
+            sed -i "s/^COMPOSITION = .*/COMPOSITION = 'heterogeneous'/" "$TEMP_CONFIG_FILE"
+            sed -i "s/^COMPOSITION_SHAPE = .*/COMPOSITION_SHAPE = 'average'/" "$TEMP_CONFIG_FILE"
             sed -i "s/^USE_RANDOM_SEED = .*/USE_RANDOM_SEED = $USE_RANDOM_SEED/" "$TEMP_CONFIG_FILE"
             sed -i "s/^SEED_NUMBER = .*/SEED_NUMBER = $SEED_NUMBER/" "$TEMP_CONFIG_FILE"
             sed -i "s/^TIME_STEP = .*/TIME_STEP = $TIME_STEP/" "$TEMP_CONFIG_FILE"
             sed -i "s/^NEW_VMS_PER_STEP = .*/NEW_VMS_PER_STEP = $NEW_VMS_PER_STEP/" "$TEMP_CONFIG_FILE"
-            sed -i "s/^NEW_VMS_PATTERN = .*/NEW_VMS_PATTERN = '$NEW_VMS_PATTERN'/" "$TEMP_CONFIG_FILE"
+            sed -i "s/^NEW_VMS_PATTERN = .*/NEW_VMS_PATTERN = 'constant'/" "$TEMP_CONFIG_FILE"
             sed -i "s/^NUM_TIME_STEPS = .*/NUM_TIME_STEPS = $NUM_TIME_STEPS/" "$TEMP_CONFIG_FILE"
             sed -i "s/^MASTER_MODEL = .*/MASTER_MODEL = '$MASTER_MODEL'/" "$TEMP_CONFIG_FILE"
             sed -i "s/^WORKLOAD_NAME = .*/WORKLOAD_NAME = '$WORKLOAD_NAME'/" "$TEMP_CONFIG_FILE"
@@ -200,41 +115,20 @@ for USE_RANDOM_SEED in "${USE_RANDOM_SEED_VALUES[@]}"; do
             sed -i "s/^PM_MANAGER_MAX_PMS = .*/PM_MANAGER_MAX_PMS = $PM_MANAGER_MAX_PMS/" "$TEMP_CONFIG_FILE"
             sed -i "s/^FAILED_MIGRATIONS_LIMIT = .*/FAILED_MIGRATIONS_LIMIT = $FAILED_MIGRATIONS_LIMIT/" "$TEMP_CONFIG_FILE"
 
-            sed -i "s/^HARD_TIME_LIMIT_MAIN = .*/HARD_TIME_LIMIT_MAIN = $hard_time_limit_main/" "$TEMP_CONFIG_FILE"
-            sed -i "s/^HARD_TIME_LIMIT_MINI = .*/HARD_TIME_LIMIT_MINI = $hard_time_limit_mini/" "$TEMP_CONFIG_FILE"
+            sed -i "s/^HARD_TIME_LIMIT_MAIN = .*/HARD_TIME_LIMIT_MAIN = 100000/" "$TEMP_CONFIG_FILE"
+            sed -i "s/^HARD_TIME_LIMIT_MINI = .*/HARD_TIME_LIMIT_MINI = 100000/" "$TEMP_CONFIG_FILE"
 
             # Define output log file for capturing run.sh output
             OUTPUT_LOG_FILE="$TEMP_DIR/output_${USE_RANDOM_SEED}_${SEED_NUMBER}_${WORKLOAD_NAME}_${TIME_STEP}_${NEW_VMS_PER_STEP}_${NEW_VMS_PATTERN}_${NUM_TIME_STEPS}_${MASTER_MODEL}.log"
 
             CURRENT_TEST=$((CURRENT_TEST + 1))
 
-            # Capture the start time
-            START_TIME=$(date +%s)
+            echo "Running test $CURRENT_TEST of $TOTAL_TESTS..."
+            echo "Master model: $MASTER_MODEL, PMS: $PMS, VMS: $NEW_VMS_PER_STEP"
+            echo ""
 
-            if [ ! -f "$INITIAL_PMS_FILE" ]; then
-              echo "Initial PM file not found at $INITIAL_PMS_FILE."
-
-              echo "Running test $CURRENT_TEST of $TOTAL_TESTS..."
-              echo "Workload name: $WORKLOAD_NAME, Master model: $MASTER_MODEL"
-              echo ""
-
-              # Run the simulation with the specified number of physical machines
-              ./run.sh -P $NUM_PHYSICAL_MACHINES --config "$TEMP_CONFIG_FILE" > "$OUTPUT_LOG_FILE"
-            else 
-
-              echo "Running test $CURRENT_TEST of $TOTAL_TESTS..."
-              echo "Workload name: $WORKLOAD_NAME, Master model: $MASTER_MODEL"
-              echo ""
-
-              # Run the simulation 
-              ./run.sh --config "$TEMP_CONFIG_FILE" > "$OUTPUT_LOG_FILE"
-            fi
-
-            # Capture the end time
-            END_TIME=$(date +%s)
-
-            # Calculate the duration
-            DURATION=$((END_TIME - START_TIME))
+            # Run the simulation 
+            ./run.sh --config "$TEMP_CONFIG_FILE" > "$OUTPUT_LOG_FILE" -P $PMS
 
             # Clean ANSI escape codes from the output log file and save cleaned output to a temporary file
             CLEANED_OUTPUT_LOG_FILE="${OUTPUT_LOG_FILE}.clean"
@@ -257,66 +151,56 @@ for USE_RANDOM_SEED in "${USE_RANDOM_SEED_VALUES[@]}"; do
             TOTAL_MODEL_RUNTIME=$(grep "Total Model Runtime" "$CLEANED_OUTPUT_LOG_FILE" | tail -n 1 | awk -F': ' '{print $2}')
             FINAL_NET_PROFIT=$(grep "Final Net Profit" "$CLEANED_OUTPUT_LOG_FILE" | tail -n 1 | awk -F': ' '{print $2}')
             
+            # Strip non-numeric characters from TOTAL_MODEL_RUNTIME
+            TOTAL_MODEL_RUNTIME=$(echo "$TOTAL_MODEL_RUNTIME" | sed 's/[^0-9.]//g')
+
+            if [ -z "$TOTAL_MODEL_RUNTIME" ] || [ -z "$NUM_TIME_STEPS" ]; then
+              echo "Error: TOTAL_MODEL_RUNTIME or NUM_TIME_STEPS is not set."
+              exit 1
+            fi
+
+            if [ "$NUM_TIME_STEPS" -eq 0 ]; then
+              echo "Error: NUM_TIME_STEPS is zero, cannot divide by zero."
+              exit 1
+            fi
+
+            ALLOCATION_RUNTIME_PER_STEP=$(echo "scale=4; $TOTAL_MODEL_RUNTIME / $NUM_TIME_STEPS" | bc)
+
             # Save the results and configuration parameters to the results file
             echo "Test $CURRENT_TEST of $TOTAL_TESTS" >> "$RESULTS_FILE"
-            echo "HOMOGENEOUS=$HOMOGENEOUS, NEW_VMS_PATTERN=$NEW_VMS_PATTERN, USE_RANDOM_SEED=$USE_RANDOM_SEED, SEED_NUMBER=$SEED_NUMBER, NEW_VMS_PER_STEP=$NEW_VMS_PER_STEP" >> "$RESULTS_FILE"
+            echo "PMS=$PMS, USE_RANDOM_SEED=$USE_RANDOM_SEED, SEED_NUMBER=$SEED_NUMBER, NEW_VMS_PER_STEP=$NEW_VMS_PER_STEP" >> "$RESULTS_FILE"
             echo "------------------------------------------" >> "$RESULTS_FILE"
-            echo "WORKLOAD_NAME=$WORKLOAD_NAME" >> "$RESULTS_FILE"
             echo "MASTER_MODEL=$MASTER_MODEL" >> "$RESULTS_FILE"
             echo "TIME_STEP=$TIME_STEP" >> "$RESULTS_FILE"
             echo "NUM_TIME_STEPS=$NUM_TIME_STEPS" >> "$RESULTS_FILE"
             echo "------------------------------------------" >> "$RESULTS_FILE"
             echo "Non-valid entries: $NON_VALID_ENTRIES" >> "$RESULTS_FILE"
-            echo "Average wait time: $AVG_WAIT_TIME" >> "$RESULTS_FILE"
-            echo "Runtime efficiency: $RUNTIME_EFFICIENCY" >> "$RESULTS_FILE"
-            echo "Overall time efficiency: $OVERALL_TIME_EFFICIENCY" >> "$RESULTS_FILE"
-            echo "Total Model Runtime: $TOTAL_MODEL_RUNTIME" >> "$RESULTS_FILE"
-            echo "Time taken for this configuration: ${DURATION} seconds" >> "$RESULTS_FILE"
+            echo "Allocation Runtime: $ALLOCATION_RUNTIME_PER_STEP" >> "$RESULTS_FILE"
             echo "------------------------------------------" >> "$RESULTS_FILE"
             echo "Completed migrations: $COMPLETED_MIGRATIONS" >> "$RESULTS_FILE"
             echo "Max percentage of PMs on: $MAX_PERCENTAGE_OF_PMS_ON" >> "$RESULTS_FILE"
             echo "Average number of PMs on: $AVERAGE_NUMBER_OF_PMS_ON" >> "$RESULTS_FILE"
             echo "Average PM loads: $AVERAGE_PM_LOADS" >> "$RESULTS_FILE"
-            echo "------------------------------------------" >> "$RESULTS_FILE"
-            echo "Total Revenue: $TOTAL_REVENUE" >> "$RESULTS_FILE"
-            echo "Total PM Load Cost: $TOTAL_PM_LOAD_COST" >> "$RESULTS_FILE"
-            echo "Total PM Switch Cost: $TOTAL_PM_SWITCH_COST" >> "$RESULTS_FILE"
-            echo "Total Migration Energy Cost: $TOTAL_MIGRATION_ENERGY_COST" >> "$RESULTS_FILE"
-            echo "Total Costs: $TOTAL_COSTS" >> "$RESULTS_FILE"
-            echo "" >> "$RESULTS_FILE"
-            echo "Final Net Profit: $FINAL_NET_PROFIT" >> "$RESULTS_FILE"
             echo "=============================" >> "$RESULTS_FILE"
             echo "" >> "$RESULTS_FILE"
 
             echo "Test $CURRENT_TEST of $TOTAL_TESTS"
-            echo "HOMOGENEOUS=$HOMOGENEOUS, NEW_VMS_PATTERN=$NEW_VMS_PATTERN, USE_RANDOM_SEED=$USE_RANDOM_SEED, SEED_NUMBER=$SEED_NUMBER, NEW_VMS_PER_STEP=$NEW_VMS_PER_STEP"
+            echo "PMS=$PMS, USE_RANDOM_SEED=$USE_RANDOM_SEED, SEED_NUMBER=$SEED_NUMBER, NEW_VMS_PER_STEP=$NEW_VMS_PER_STEP"
             echo "------------------------------------------"
-            echo "WORKLOAD_NAME=$WORKLOAD_NAME" 
             echo "MASTER_MODEL=$MASTER_MODEL"
             echo "TIME_STEP=$TIME_STEP"
             echo "NUM_TIME_STEPS=$NUM_TIME_STEPS"
             echo "------------------------------------------"
             echo "Non-valid entries: $NON_VALID_ENTRIES"
-            echo "Average wait time: $AVG_WAIT_TIME"
-            echo "Runtime efficiency: $RUNTIME_EFFICIENCY"
-            echo "Overall time efficiency: $OVERALL_TIME_EFFICIENCY"
-            echo "Total Model Runtime: $TOTAL_MODEL_RUNTIME"
-            echo "Time taken for this configuration: ${DURATION} seconds"
+            echo "Allocation Runtime: $ALLOCATION_RUNTIME_PER_STEP"
             echo "------------------------------------------"
             echo "Completed migrations: $COMPLETED_MIGRATIONS"
             echo "Max percentage of PMs on: $MAX_PERCENTAGE_OF_PMS_ON"
             echo "Average number of PMs on: $AVERAGE_NUMBER_OF_PMS_ON"
             echo "Average PM loads: $AVERAGE_PM_LOADS"
-            echo "------------------------------------------"
-            echo "Total Revenue: $TOTAL_REVENUE"
-            echo "Total PM Load Cost: $TOTAL_PM_LOAD_COST"
-            echo "Total PM Switch Cost: $TOTAL_PM_SWITCH_COST"
-            echo "Total Migration Energy Cost: $TOTAL_MIGRATION_ENERGY_COST"
-            echo "Total Costs: $TOTAL_COSTS"
-            echo ""
-            echo "Final Net Profit: $FINAL_NET_PROFIT"
             echo "============================="
             echo ""
+
           done
         done
       done
@@ -329,10 +213,6 @@ rm -rf "$TEMP_DIR"
 
 echo "All results have been saved to $RESULTS_FILE"
 
-if [ "$USE_REAL_DATA" = "True" ]; then
-  python analyze_test_results.py --file "$RESULTS_FILE"
-else
-  python analyze_test_results.py --file "$RESULTS_FILE" --groupby_workload NEW_VMS_PATTERN
-fi
+python plot_scalability_test_results.py "$RESULTS_FILE"
 
 

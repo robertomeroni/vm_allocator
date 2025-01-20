@@ -6,40 +6,86 @@ from copy import deepcopy
 
 from colorama import Fore
 
-from algorithms import (backup_allocation, best_fit, first_fit, guazzone_bfd,
-                        load_balancer, shi_allocation, shi_migration)
-from allocation import (detect_overload, get_non_allocated_vms,
-                        get_non_allocated_workload, get_vms_on_pm, get_vms_on_pms,
-                        is_allocation_for_all_vms, is_fully_on_next_step,
-                        migration_reallocate_vms, reallocate_vms,
-                        run_opl_model, update_physical_machines_load,
-                        update_physical_machines_state)
-from calculate import (calculate_load, calculate_total_costs,
-                       calculate_total_revenue, get_first_vm_arrival_time,
-                       get_last_vm_arrival_time)
-from check import (check_migration_correctness, check_overload,
-                   check_unique_state, check_zero_load)
-from config import (MIGRATION_MODEL_INPUT_FOLDER_PATH,
-                    MIGRATION_MODEL_OUTPUT_FOLDER_PATH,
-                    MINI_MODEL_INPUT_FOLDER_PATH,
-                    MINI_MODEL_OUTPUT_FOLDER_PATH, MODEL_INPUT_FOLDER_PATH,
-                    MODEL_OUTPUT_FOLDER_PATH, OUTPUT_FOLDER_PATH,
-                    SAVE_VM_AND_PM_SETS)
+from algorithms import (
+    backup_allocation,
+    best_fit,
+    first_fit,
+    load_balancer,
+    shi_allocation,
+    shi_migration,
+    lago,
+)
+from allocation import (
+    detect_overload,
+    get_non_allocated_vms,
+    get_non_allocated_workload,
+    get_vms_on_pm,
+    get_vms_on_pms,
+    is_allocation_for_all_vms,
+    is_fully_on_next_step,
+    migration_reallocate_vms,
+    reallocate_vms,
+    run_opl_model,
+    update_physical_machines_load,
+    update_physical_machines_state,
+)
+from calculate import (
+    calculate_load,
+    calculate_total_costs,
+    calculate_total_revenue,
+    get_first_vm_arrival_time,
+    get_last_vm_arrival_time,
+)
+from check import (
+    check_migration_correctness,
+    check_overload,
+    check_unique_state,
+    check_zero_load,
+)
+from config import (
+    MIGRATION_MODEL_INPUT_FOLDER_PATH,
+    MIGRATION_MODEL_OUTPUT_FOLDER_PATH,
+    MINI_MODEL_INPUT_FOLDER_PATH,
+    MINI_MODEL_OUTPUT_FOLDER_PATH,
+    MODEL_INPUT_FOLDER_PATH,
+    MODEL_OUTPUT_FOLDER_PATH,
+    OUTPUT_FOLDER_PATH,
+    SAVE_VM_AND_PM_SETS,
+)
 from data_generator import generate_new_vms
-from filter import (filter_fragmented_pms, filter_full_and_migrating_pms,
-                    filter_full_pms_dict, filter_migrating_pms,
-                    filter_pms_to_turn_off_after_migration, filter_vms_on_pms,
-                    filter_vms_on_pms_and_non_allocated,
-                    get_fragmented_pms_list, is_pm_full, sort_key_load,
-                    sort_key_specific_power_load, split_dict_sorted, split_dict_unsorted)
+from filter import (
+    filter_fragmented_pms,
+    filter_full_and_migrating_pms,
+    filter_full_pms_dict,
+    filter_migrating_pms,
+    filter_pms_to_turn_off_after_migration,
+    filter_vms_on_pms,
+    filter_vms_on_pms_and_non_allocated,
+    get_fragmented_pms_list,
+    is_pm_full,
+    sort_key_load,
+    sort_key_specific_power_load,
+    split_dict_sorted,
+    split_dict_unsorted,
+)
 from log import log_allocation, log_performance, log_vm_execution_time
-from mini import (mini_reallocate_vms, parse_mini_opl_output,
-                  save_mini_model_input_format)
+from mini import (
+    mini_reallocate_vms,
+    parse_mini_opl_output,
+    save_mini_model_input_format,
+)
 from pm_manager import launch_pm_manager
-from utils import (color_text, evaluate_piecewise_linear_function,
-                   get_opl_return_code, is_opl_output_valid, load_new_vms,
-                   parse_opl_output, save_model_input_format, save_pm_sets,
-                   save_vm_sets)
+from utils import (
+    color_text,
+    evaluate_piecewise_linear_function,
+    get_opl_return_code,
+    is_opl_output_valid,
+    load_new_vms,
+    parse_opl_output,
+    save_model_input_format,
+    save_pm_sets,
+    save_vm_sets,
+)
 from weights import w_load_cpu, EPSILON
 
 try:
@@ -72,25 +118,20 @@ def run_main_model(
 ):
     pms_with_migrations = {}
 
-    
-
     num_vms = len(vms)
     num_pms = len(highest_fragmentation_pms)
 
     if num_vms > 0 and num_pms > 0:
         # Convert into model input format
-        vm_model_input_file_path, pm_model_input_file_path = (
-            save_model_input_format(
-                vms,
-                highest_fragmentation_pms,
-                step,
-                MODEL_INPUT_FOLDER_PATH,
-                specific_power_function_database,
-                nb_points,
-            )
+        vm_model_input_file_path, pm_model_input_file_path = save_model_input_format(
+            vms,
+            highest_fragmentation_pms,
+            step,
+            MODEL_INPUT_FOLDER_PATH,
+            specific_power_function_database,
+            nb_points,
         )
 
-    if num_vms > 0 and num_pms > 0:
         # Run CPLEX model
         print(color_text(f"\nRunning main model for time step {step}...", Fore.YELLOW))
         start_time_opl = time.time()
@@ -155,9 +196,7 @@ def run_main_model(
                         else:
                             pms_with_migrations[pm_id] = physical_machines[pm_id]
 
-            vms_on_pms_with_migrations = filter_vms_on_pms(
-                vms, pms_with_migrations
-            )
+            vms_on_pms_with_migrations = filter_vms_on_pms(vms, pms_with_migrations)
 
             if pms_with_migrations:
                 for vm_on_pm in vms_on_pms_with_migrations.values():
@@ -219,12 +258,13 @@ def run_main_model(
     else:
         print(color_text(f"\nNo available PMs for time step {step}...", Fore.YELLOW))
 
+
 def launch_main_model(
     active_vms,
     scheduled_vms,
     physical_machines_on,
     pms_to_turn_off_after_migration,
-    main_model_max_subsets, 
+    main_model_max_subsets,
     main_model_max_pms,
     mini_model_max_pms,
     mini_model_max_vms,
@@ -237,14 +277,16 @@ def launch_main_model(
     hard_time_limit_mini,
     performance_log_file,
     master_model,
-):  
+):
     physical_machines = physical_machines_on.copy()
 
     for _ in range(main_model_max_subsets):
         if physical_machines_on:
             filter_full_and_migrating_pms(active_vms, physical_machines_on)
             if physical_machines_on:
-                highest_fragmentation_pms = filter_fragmented_pms(physical_machines_on, main_model_max_pms)
+                highest_fragmentation_pms = filter_fragmented_pms(
+                    physical_machines_on, main_model_max_pms
+                )
                 filtered_vms = filter_vms_on_pms_and_non_allocated(
                     active_vms, highest_fragmentation_pms, scheduled_vms
                 )
@@ -272,6 +314,7 @@ def launch_main_model(
                     del physical_machines_on[pm_id]
             else:
                 break
+
 
 @profile
 def run_mini_model(
@@ -384,7 +427,7 @@ def launch_mini_model(
     nb_points,
     hard_time_limit_mini,
     performance_log_file,
-):  
+):
     if non_allocated_vms:
         if mini_model_max_vms and len(non_allocated_vms) > mini_model_max_vms:
             non_allocated_vms_subsets = split_dict_unsorted(
@@ -401,7 +444,10 @@ def launch_mini_model(
 
             if physical_machines_on:
                 # Determine PM subset
-                if mini_model_max_pms and len(physical_machines_on) > mini_model_max_pms:
+                if (
+                    mini_model_max_pms
+                    and len(physical_machines_on) > mini_model_max_pms
+                ):
                     physical_machines_on_subsets = split_dict_sorted(
                         physical_machines_on,
                         mini_model_max_pms,
@@ -412,8 +458,10 @@ def launch_mini_model(
                     physical_machines_on_subsets = [physical_machines_on]
 
                 for index, pm_subset in enumerate(physical_machines_on_subsets):
-                    if index != 0:  
-                        non_allocated_vms = get_non_allocated_workload(non_allocated_vms_subset, scheduled_vms)
+                    if index != 0:
+                        non_allocated_vms = get_non_allocated_workload(
+                            non_allocated_vms_subset, scheduled_vms
+                        )
                     else:
                         non_allocated_vms = non_allocated_vms_subset
 
@@ -444,13 +492,19 @@ def launch_mini_model(
                         )
 
                         # Calculate and update load
-                        cpu_load, memory_load = calculate_load(pm_subset, active_vms, time_step)
+                        cpu_load, memory_load = calculate_load(
+                            pm_subset, active_vms, time_step
+                        )
                         update_physical_machines_load(pm_subset, cpu_load, memory_load)
 
                     else:
                         break
             else:
-                print(color_text(f"\nNo available PMs for time step {step}...", Fore.YELLOW))
+                print(
+                    color_text(
+                        f"\nNo available PMs for time step {step}...", Fore.YELLOW
+                    )
+                )
 
 
 @profile
@@ -523,7 +577,7 @@ def launch_migration_model(
     fragmented_pms = get_fragmented_pms_list(
         physical_machines_on, limit=migration_model_max_fragmented_pms
     )
-    if len(fragmented_pms) > 1:
+    if len(fragmented_pms) > 0:
         fragmented_pms.sort(key=sort_key_load, reverse=True)
         physical_machines_on_without_pm = physical_machines_on.copy()
 
@@ -648,10 +702,18 @@ def launch_migration_model(
                     ):
                         break
 
+
 @profile
-def run_load_balancer(active_vms, physical_machines_on, pms_to_turn_off_after_migration, specific_power_function_database, step, performance_log_file):
+def run_load_balancer(
+    active_vms,
+    physical_machines_on,
+    pms_to_turn_off_after_migration,
+    specific_power_function_database,
+    step,
+    performance_log_file,
+):
     load_balancer_start_time = time.time()
-    
+
     filter_migrating_pms(active_vms, physical_machines_on)
     filter_pms_to_turn_off_after_migration(
         physical_machines_on, pms_to_turn_off_after_migration
@@ -663,19 +725,26 @@ def run_load_balancer(active_vms, physical_machines_on, pms_to_turn_off_after_mi
     # Sort PMs
     physical_machines_on.sort(
         key=lambda pm: w_load_cpu * pm["s"]["load"]["cpu"]
-        + (1 - w_load_cpu) * pm["s"]["load"]["memory"]
+        + (1 - w_load_cpu) * pm["s"]["load"]["memory"],
     )
 
     middle_index = len(physical_machines_on) // 2
 
     pm_maxs = reversed(physical_machines_on[-middle_index:])
 
-    for pm_min in physical_machines_on:
-        if pm_min["s"]["load"]["cpu"] > 1 - EPSILON or pm_min["s"]["load"]["memory"] > 1 - EPSILON:
-            break
-        for pm_max in pm_maxs:
+    for pm_max in pm_maxs:
+        for pm_min in physical_machines_on:
+            if (
+                pm_min["s"]["load"]["cpu"] > 1 - EPSILON
+                or pm_min["s"]["load"]["memory"] > 1 - EPSILON
+            ):
+                break
+            if pm_max == pm_min:
+                continue
             vms_on_pm_max = vms_on_pms[pm_max["id"]]
-            load_balancer(vms_on_pm_max, pm_max, pm_min, specific_power_function_database)
+            load_balancer(
+                vms_on_pm_max, pm_max, pm_min, specific_power_function_database
+            )
 
     load_balancer_end_time = time.time()
     log_performance(
@@ -687,6 +756,7 @@ def run_load_balancer(active_vms, physical_machines_on, pms_to_turn_off_after_mi
         len(physical_machines_on),
         performance_log_file,
     )
+
 
 def run_backup_allocation(active_vms, physical_machines, idle_power, step, time_step):
     non_allocated_vms = get_non_allocated_vms(active_vms)
@@ -742,32 +812,6 @@ def run_best_fit(
     return turned_on_pms, turned_off_pms
 
 
-def run_guazzone(
-    active_vms,
-    physical_machines,
-    initial_physical_machines,
-    idle_power,
-    step,
-    time_step,
-):
-    cpu_load, memory_load = calculate_load(
-        physical_machines, active_vms, time_step, True
-    )
-    update_physical_machines_load(physical_machines, cpu_load, memory_load)
-
-    # Run Guazzone algorithm
-    print(
-        color_text(
-            f"\nRunning Guazzone fit algorithm for time step {step}...", Fore.YELLOW
-        )
-    )
-    is_on = guazzone_bfd(active_vms, physical_machines, idle_power)
-    turned_on_pms, turned_off_pms = update_physical_machines_state(
-        physical_machines, initial_physical_machines, is_on
-    )
-    return turned_on_pms, turned_off_pms
-
-
 def run_shi(
     active_vms, physical_machines, initial_physical_machines, step, time_step, sort_key
 ):
@@ -786,6 +830,28 @@ def run_shi(
     )
     return turned_on_pms, turned_off_pms
 
+def run_lago(
+    active_vms,
+    physical_machines,
+    initial_physical_machines,
+    power_function_database,
+    step,
+    time_step,
+):
+    cpu_load, memory_load = calculate_load(
+        physical_machines, active_vms, time_step, True
+    )
+    update_physical_machines_load(physical_machines, cpu_load, memory_load)
+
+    # Run best fit algorithm
+    print(
+        color_text(f"\nRunning Lago algorithm for time step {step}...", Fore.YELLOW)
+    )
+    is_on = lago(active_vms, physical_machines, power_function_database)
+    turned_on_pms, turned_off_pms = update_physical_machines_state(
+        physical_machines, initial_physical_machines, is_on
+    )
+    return turned_on_pms, turned_off_pms
 
 def execute_time_step(
     active_vms,
@@ -799,7 +865,7 @@ def execute_time_step(
     speed_function_database,
     vm_execution_time_file,
     time_step,
-    step
+    step,
 ):
     pms_extra_time = {}
     vms_extra_time = {}
@@ -950,9 +1016,11 @@ def execute_time_step(
                     if (
                         scheduled_vm["run"]["current_time"]
                         >= scheduled_vm["run"]["total_time"]
-                    ):  
+                    ):
                         scheduled_vm["termination_step"] = step + 1
-                        log_vm_execution_time(scheduled_vm, vm_execution_time_file, time_step)
+                        log_vm_execution_time(
+                            scheduled_vm, vm_execution_time_file, time_step
+                        )
                         del active_vms[scheduled_vm["id"]]
                         terminated_vms_in_step.append(scheduled_vm)
                         terminated_vms.append(scheduled_vm)
@@ -1160,7 +1228,7 @@ def simulate_time_steps(
                 scheduled_vms,
                 physical_machines_on,
                 pms_to_turn_off_after_migration,
-                main_model_max_subsets, 
+                main_model_max_subsets,
                 main_model_max_pms,
                 mini_model_max_pms,
                 mini_model_max_vms,
@@ -1200,7 +1268,7 @@ def simulate_time_steps(
 
         elif model_to_run == "hybrid":
             non_allocated_vms = get_non_allocated_workload(active_vms, scheduled_vms)
-            
+
             start_time = time.time()
             launch_mini_model(
                 active_vms,
@@ -1223,7 +1291,7 @@ def simulate_time_steps(
                 scheduled_vms,
                 physical_machines_on,
                 pms_to_turn_off_after_migration,
-                main_model_max_subsets, 
+                main_model_max_subsets,
                 main_model_max_pms,
                 mini_model_max_pms,
                 mini_model_max_vms,
@@ -1291,8 +1359,14 @@ def simulate_time_steps(
                     for vm in non_allocated_vms.values():
                         pm_id = vm["allocation"]["pm"]
                         if pm_id != -1:
-                            available_pms[pm_id]["s"]["load"]["cpu"] += vm["requested"]["cpu"] / available_pms[pm_id]["capacity"]["cpu"]
-                            available_pms[pm_id]["s"]["load"]["memory"] += vm["requested"]["memory"] / available_pms[pm_id]["capacity"]["memory"]
+                            available_pms[pm_id]["s"]["load"]["cpu"] += (
+                                vm["requested"]["cpu"]
+                                / available_pms[pm_id]["capacity"]["cpu"]
+                            )
+                            available_pms[pm_id]["s"]["load"]["memory"] += (
+                                vm["requested"]["memory"]
+                                / available_pms[pm_id]["capacity"]["memory"]
+                            )
                             if pm_id in pms_to_turn_off_after_migration:
                                 del pms_to_turn_off_after_migration[pm_id]
             end_time = time.time()
@@ -1349,11 +1423,17 @@ def simulate_time_steps(
                     for vm in non_allocated_vms.values():
                         pm_id = vm["allocation"]["pm"]
                         if pm_id != -1:
-                            available_pms[pm_id]["s"]["load"]["cpu"] += vm["requested"]["cpu"] / available_pms[pm_id]["capacity"]["cpu"]
-                            available_pms[pm_id]["s"]["load"]["memory"] += vm["requested"]["memory"] / available_pms[pm_id]["capacity"]["memory"]
+                            available_pms[pm_id]["s"]["load"]["cpu"] += (
+                                vm["requested"]["cpu"]
+                                / available_pms[pm_id]["capacity"]["cpu"]
+                            )
+                            available_pms[pm_id]["s"]["load"]["memory"] += (
+                                vm["requested"]["memory"]
+                                / available_pms[pm_id]["capacity"]["memory"]
+                            )
                             if pm_id in pms_to_turn_off_after_migration:
                                 del pms_to_turn_off_after_migration[pm_id]
-            
+
             if use_load_balancer:
                 run_load_balancer(
                     active_vms,
@@ -1390,17 +1470,7 @@ def simulate_time_steps(
                 time_step,
             )
             end_time = time.time()
-        elif model_to_run == "guazzone":
-            start_time = time.time()
-            turned_on_pms, turned_off_pms = run_guazzone(
-                active_vms,
-                physical_machines,
-                initial_physical_machines,
-                idle_power,
-                step,
-                time_step,
-            )
-            end_time = time.time()
+ 
 
         elif model_to_run == "shi_OM":
             start_time = time.time()
@@ -1435,6 +1505,18 @@ def simulate_time_steps(
                 step,
                 time_step,
                 "PercentageUtil",
+            )
+            end_time = time.time()
+        
+        elif model_to_run == "lago":
+            start_time = time.time()
+            turned_on_pms, turned_off_pms = run_lago(
+                active_vms,
+                physical_machines,
+                initial_physical_machines,
+                power_function_database,
+                step,
+                time_step,
             )
             end_time = time.time()
 
@@ -1542,7 +1624,7 @@ def simulate_time_steps(
             speed_function_database,
             vm_execution_time_file,
             time_step,
-            step
+            step,
         )
 
         num_completed_migrations += len(completed_migrations_in_step)
@@ -1565,10 +1647,10 @@ def simulate_time_steps(
         )
 
         # Sanity checks
-        # check_migration_correctness(active_vms)
-        # check_unique_state(active_vms)
-        # check_zero_load(active_vms, physical_machines)
-        # check_overload(active_vms, physical_machines, time_step)
+        check_migration_correctness(active_vms)
+        check_unique_state(active_vms)
+        check_zero_load(active_vms, physical_machines)
+        check_overload(active_vms, physical_machines, time_step)
 
         if use_real_data and step * time_step >= last_vm_arrival_time:
             if len(active_vms) == 0:

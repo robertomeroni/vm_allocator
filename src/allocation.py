@@ -191,6 +191,7 @@ def get_vms_on_pm(active_vms, pm_id):
         or vm["migration"]["to_pm"] == pm_id
     }
 
+
 def get_vms_on_pms(active_vms, pm_ids):
     vms_on_pms = {pm_id: [] for pm_id in pm_ids}
     for vm in active_vms.values():

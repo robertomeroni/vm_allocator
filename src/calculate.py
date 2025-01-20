@@ -76,12 +76,8 @@ def calculate_load(physical_machines, active_vms, time_step, pm_manager=False):
 def calculate_load_costs(
     physical_machines, active_vms, speed_function_database, time_step
 ):
-    cpu_load = {
-        pm_id: 0.0 for pm_id in physical_machines.keys()
-    }
-    memory_load = {
-        pm_id: 0.0 for pm_id in physical_machines.keys()
-    }
+    cpu_load = {pm_id: 0.0 for pm_id in physical_machines.keys()}
+    memory_load = {pm_id: 0.0 for pm_id in physical_machines.keys()}
 
     for vm in active_vms.values():
         pm_id = (
@@ -113,7 +109,7 @@ def calculate_load_costs(
                     if remaining_run_time < time_step
                     else 1
                 )
-            
+
                 if pm["s"]["state"] == 1 and pm["s"]["time_to_turn_on"] < time_step:
                     cpu_load[pm_id] += (
                         run_time_weight * vm["requested"]["cpu"] / pm["capacity"]["cpu"]
@@ -126,17 +122,11 @@ def calculate_load_costs(
 
     for pm_id in physical_machines.keys():
         if cpu_load[pm_id] > 1:
-            cpu_load[pm_id] = round_down(
-                cpu_load[pm_id]
-            )
+            cpu_load[pm_id] = round_down(cpu_load[pm_id])
         elif cpu_load[pm_id] < 0:
-            raise ValueError(
-                f"CPU load for PM {pm_id} is negative: {cpu_load[pm_id]}"
-            )
+            raise ValueError(f"CPU load for PM {pm_id} is negative: {cpu_load[pm_id]}")
         if memory_load[pm_id] > 1:
-            memory_load[pm_id] = round_down(
-                memory_load[pm_id]
-            )
+            memory_load[pm_id] = round_down(memory_load[pm_id])
         elif memory_load[pm_id] < 0:
             raise ValueError(
                 f"Memory load for PM {pm_id} is negative: {memory_load[pm_id]}"
@@ -156,10 +146,8 @@ def calculate_total_costs(
     speed_function_database,
     time_step,
 ):
-    cpu_load, memory_load = (
-        calculate_load_costs(
-            physical_machines, active_vms, speed_function_database, time_step
-        )
+    cpu_load, memory_load = calculate_load_costs(
+        physical_machines, active_vms, speed_function_database, time_step
     )
 
     # Initialize variables
@@ -248,8 +236,11 @@ def calculate_performance_metrics(vm_execution_time_file):
             num_vms += 1
 
     avg_wait_time = total_wait_time / num_vms if num_vms > 0 else 0
-    runtime_efficiency = (total_expected_runtime / total_real_runtime) if total_real_runtime > 0 else 0
-    overall_time_efficiency = (total_expected_runtime / total_time) if total_time > 0 else 0
+    runtime_efficiency = (
+        (total_expected_runtime / total_real_runtime) if total_real_runtime > 0 else 0
+    )
+    overall_time_efficiency = (
+        (total_expected_runtime / total_time) if total_time > 0 else 0
+    )
 
     return avg_wait_time, runtime_efficiency, overall_time_efficiency
-

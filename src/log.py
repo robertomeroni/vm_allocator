@@ -50,6 +50,7 @@ def log_performance(
         writer = csv.writer(f)
         writer.writerow([step, model, time_taken, valid_str, num_vms, num_pms])
 
+
 def log_vm_execution_time(vm, vm_execution_time_file, time_step):
     wait_time = vm["allocation_step"] - vm["arrival_step"]
     expected_runtime = math.ceil(vm["run"]["total_time"] / time_step)
@@ -57,7 +58,9 @@ def log_vm_execution_time(vm, vm_execution_time_file, time_step):
     total_time = vm["termination_step"] - vm["arrival_step"]
     with open(vm_execution_time_file, "a", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow([vm["id"], wait_time, expected_runtime, real_runtime, total_time])
+        writer.writerow(
+            [vm["id"], wait_time, expected_runtime, real_runtime, total_time]
+        )
 
 
 @profile
@@ -512,7 +515,9 @@ def log_final_net_profit(
     )
     avg_wait_time_message = f"Average Wait Time: {avg_wait_time:.2f}"
     runtime_efficiency_message = f"Runtime Efficiency: {runtime_efficiency:.2f}"
-    overall_time_efficiency_message = f"Overall Time Efficiency: {overall_time_efficiency:.2f}"
+    overall_time_efficiency_message = (
+        f"Overall Time Efficiency: {overall_time_efficiency:.2f}"
+    )
     time_step_message = f"Time Step: {time_step}"
     num_steps_message = f"Number of Time Steps: {num_steps}"
     total_revenue_message = (

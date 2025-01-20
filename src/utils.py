@@ -7,8 +7,11 @@ import numpy as np
 import pandas as pd
 from colorama import Style
 
-from config import (MODEL_INPUT_FOLDER_PATH, PM_DATABASE_FILE,
-                    SPECIFIC_POWER_FUNCTION_FILE)
+from config import (
+    MODEL_INPUT_FOLDER_PATH,
+    PM_DATABASE_FILE,
+    SPECIFIC_POWER_FUNCTION_FILE,
+)
 from weights import migration, price, pue, w_load_cpu
 
 try:
@@ -185,7 +188,7 @@ def load_physical_machines(file_path):
     return pms
 
 
-def load_pm_database():
+def load_pm_database(composition, shape="average"):
     pm_database = {}
     power_function_database = {}
     speed_function_database = {}
@@ -209,33 +212,128 @@ def load_pm_database():
             "type": index,
         }
 
-        power_function_database[index] = {
-            "0.0": row["Average watts @ active idle"],
-            "0.1": row["Average watts @ 10% of target load"],
-            "0.2": row["Average watts @ 20% of target load"],
-            "0.3": row["Average watts @ 30% of target load"],
-            "0.4": row["Average watts @ 40% of target load"],
-            "0.5": row["Average watts @ 50% of target load"],
-            "0.6": row["Average watts @ 60% of target load"],
-            "0.7": row["Average watts @ 70% of target load"],
-            "0.8": row["Average watts @ 80% of target load"],
-            "0.9": row["Average watts @ 90% of target load"],
-            "1.0": row["Average watts @ 100% of target load"],
-        }
+        if composition == "heterogeneous":
+            power_function_database[index] = {
+                "0.0": row["Average watts @ active idle"],
+                "0.1": row["Average watts @ 10% of target load"],
+                "0.2": row["Average watts @ 20% of target load"],
+                "0.3": row["Average watts @ 30% of target load"],
+                "0.4": row["Average watts @ 40% of target load"],
+                "0.5": row["Average watts @ 50% of target load"],
+                "0.6": row["Average watts @ 60% of target load"],
+                "0.7": row["Average watts @ 70% of target load"],
+                "0.8": row["Average watts @ 80% of target load"],
+                "0.9": row["Average watts @ 90% of target load"],
+                "1.0": row["Average watts @ 100% of target load"],
+            }
 
-        speed_function_database[index] = {
-            "0.0": row["speed @ 10% of target load"],
-            "0.1": row["speed @ 10% of target load"],
-            "0.2": row["speed @ 20% of target load"],
-            "0.3": row["speed @ 30% of target load"],
-            "0.4": row["speed @ 40% of target load"],
-            "0.5": row["speed @ 50% of target load"],
-            "0.6": row["speed @ 60% of target load"],
-            "0.7": row["speed @ 70% of target load"],
-            "0.8": row["speed @ 80% of target load"],
-            "0.9": row["speed @ 90% of target load"],
-            "1.0": row["speed @ 100% of target load"],
-        }
+            speed_function_database[index] = {
+                "0.0": row["speed @ 10% of target load"],
+                "0.1": row["speed @ 10% of target load"],
+                "0.2": row["speed @ 20% of target load"],
+                "0.3": row["speed @ 30% of target load"],
+                "0.4": row["speed @ 40% of target load"],
+                "0.5": row["speed @ 50% of target load"],
+                "0.6": row["speed @ 60% of target load"],
+                "0.7": row["speed @ 70% of target load"],
+                "0.8": row["speed @ 80% of target load"],
+                "0.9": row["speed @ 90% of target load"],
+                "1.0": row["speed @ 100% of target load"],
+            }
+
+        elif composition == "almost_heterogeneous":
+            if shape == "average":
+                power_function_database[index] = {
+                    "0.0": row["Average watts @ active idle"],
+                    "0.1": 1.945 * row["Average watts @ active idle"],
+                    "0.2": 2.121 * row["Average watts @ active idle"],
+                    "0.3": 2.336 * row["Average watts @ active idle"],
+                    "0.4": 2.549 * row["Average watts @ active idle"],
+                    "0.5": 2.899 * row["Average watts @ active idle"],
+                    "0.6": 3.133 * row["Average watts @ active idle"],
+                    "0.7": 3.405 * row["Average watts @ active idle"],
+                    "0.8": 3.677 * row["Average watts @ active idle"],
+                    "0.9": 3.911 * row["Average watts @ active idle"],
+                    "1.0": 4.165 * row["Average watts @ active idle"],
+                }
+
+            elif shape == "linear":
+                power_function_database[index] = {
+                    "0.0": row["Average watts @ active idle"],
+                    "0.1": 1.0261 * row["Average watts @ active idle"],
+                    "0.2": 1.0557 * row["Average watts @ active idle"],
+                    "0.3": 1.0835 * row["Average watts @ active idle"],
+                    "0.4": 1.1113 * row["Average watts @ active idle"],
+                    "0.5": 1.1409 * row["Average watts @ active idle"],
+                    "0.6": 1.1704 * row["Average watts @ active idle"],
+                    "0.7": 1.2000 * row["Average watts @ active idle"],
+                    "0.8": 1.2243 * row["Average watts @ active idle"],
+                    "0.9": 1.2452 * row["Average watts @ active idle"],
+                    "1.0": 1.2739 * row["Average watts @ active idle"],
+                }
+
+            elif shape == "exponential":
+                power_function_database[index] = {
+                    "0.0": row["Average watts @ active idle"],
+                    "0.1": 2.8280 * row["Average watts @ active idle"],
+                    "0.2": 3.3491 * row["Average watts @ active idle"],
+                    "0.3": 3.8715 * row["Average watts @ active idle"],
+                    "0.4": 4.4164 * row["Average watts @ active idle"],
+                    "0.5": 5.0362 * row["Average watts @ active idle"],
+                    "0.6": 5.9052 * row["Average watts @ active idle"],
+                    "0.7": 6.7985 * row["Average watts @ active idle"],
+                    "0.8": 8.2114 * row["Average watts @ active idle"],
+                    "0.9": 9.8769 * row["Average watts @ active idle"],
+                    "1.0": 11.2660 * row["Average watts @ active idle"],
+                }
+
+            speed_function_database[index] = {
+                "0.0": row["speed @ 10% of target load"],
+                "0.1": row["speed @ 10% of target load"],
+                "0.2": 0.9992 * row["speed @ 10% of target load"],
+                "0.3": 1.0033 * row["speed @ 10% of target load"],
+                "0.4": 1.0006 * row["speed @ 10% of target load"],
+                "0.5": 1.0002 * row["speed @ 10% of target load"],
+                "0.6": 0.9993 * row["speed @ 10% of target load"],
+                "0.7": 1.0015 * row["speed @ 10% of target load"],
+                "0.8": 0.9999 * row["speed @ 10% of target load"],
+                "0.9": 0.9981 * row["speed @ 10% of target load"],
+                "1.0": 0.9962 * row["speed @ 10% of target load"],
+            }
+
+        elif composition == "almost_homogeneous" or composition == "homogeneous":
+            if index == 0:
+                power_function_database[index] = {
+                    "0.0": row["Average watts @ active idle"],
+                    "0.1": row["Average watts @ 10% of target load"],
+                    "0.2": row["Average watts @ 20% of target load"],
+                    "0.3": row["Average watts @ 30% of target load"],
+                    "0.4": row["Average watts @ 40% of target load"],
+                    "0.5": row["Average watts @ 50% of target load"],
+                    "0.6": row["Average watts @ 60% of target load"],
+                    "0.7": row["Average watts @ 70% of target load"],
+                    "0.8": row["Average watts @ 80% of target load"],
+                    "0.9": row["Average watts @ 90% of target load"],
+                    "1.0": row["Average watts @ 100% of target load"],
+                }
+
+                speed_function_database[index] = {
+                    "0.0": row["speed @ 10% of target load"],
+                    "0.1": row["speed @ 10% of target load"],
+                    "0.2": row["speed @ 20% of target load"],
+                    "0.3": row["speed @ 30% of target load"],
+                    "0.4": row["speed @ 40% of target load"],
+                    "0.5": row["speed @ 50% of target load"],
+                    "0.6": row["speed @ 60% of target load"],
+                    "0.7": row["speed @ 70% of target load"],
+                    "0.8": row["speed @ 80% of target load"],
+                    "0.9": row["speed @ 90% of target load"],
+                    "1.0": row["speed @ 100% of target load"],
+                }
+
+            else:
+                power_function_database[index] = power_function_database[0]
+                speed_function_database[index] = speed_function_database[0]
 
         specific_power_function_database[index] = {
             "0.0": power_function_database[index]["0.0"]
@@ -480,8 +578,6 @@ def is_opl_output_valid(output, return_code):
     ):
         return False
     return True
-
-
 
 
 def parse_matrix(matrix_str):
